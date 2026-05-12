@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>VeriPath Practice Portal</title>
+    <style>
+        body { font-family: sans-serif; background: #f4f4f4; padding: 20px; }
+        .container { background: white; padding: 20px; border-radius: 8px; max-width: 400px; }
+        input, select { display: block; width: 100%; margin-bottom: 10px; padding: 8px; }
+        button { background: #28a745; color: white; border: none; padding: 10px; width: 100%; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>KEPHIS Form Simulation</h2>
+        <input type="text" id="farmer_id_input" placeholder="Farmer ID">
+        <label>Harvest Date:</label>
+        <input type="date" id="harvest_date_input">
+        <select id="country_select">
+            <option value="">Select Destination</option>
+            <option value="Netherlands">Netherlands</option>
+            <option value="UAE">UAE</option>
+            <option value="UK">United Kingdom</option>
+        </select>
+        <button id="submit_button">Submit Filing</button>
+        <p id="status"></p>
+    </div>
+    <script>
+        document.getElementById('submit_button').onclick = function() {
+            const id = document.getElementById('farmer_id_input').value;
+            const date = document.getElementById('harvest_date_input').value;
+            if(id && date) {
+                document.getElementById('status').innerText = "SUCCESS: Filed for " + id + " on " + date;
+            } else {
+                document.getElementById('status').innerText = "FAILED: Missing Data";
+            }
+        }
+    </script>
+</body>
+</html>
