@@ -1,0 +1,4 @@
+id,name,crop,botanical_name,variety,weight,destination,consignee_address,packhouse_id,lat,lon,date
+KE-NRK-001,John Doe,Avocado,Persea americana,Hass,500,Netherlands,Amsterdam_Port_Str_12,PH-NRK-09,-1.078,35.860,2026-05-11
+KE-NRK-002,Jane Smith,Mango,Mangifera indica,Apple,1200,UAE,Dubai_Trade_Zone_B5,PH-MSA-22,-4.043,39.662,2026-05-11
+KE-NRK-003,Samuel Otieno,Avocado,Persea americana,Hass,300,UK,London_Heathrow_Cargo_A,PH-NRK-09,-1.080,35.865,2026-05-11
