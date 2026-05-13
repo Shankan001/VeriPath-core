@@ -1,17 +1,15 @@
-# 💎 VeriPath: Frontier Compliance Hub
-**VeriPath** is an Open Source Digital Public Good (DPG) designed to secure global supply chains for smallholder farmers. 
+# VeriPath Core
 
-## 🌍 Social & Climate Impact
-- **EUDR Compliance**: Ensuring zero-deforestation in export crops.
-- **Waste Reduction**: Real-time IoT monitoring to prevent food spoilage.
-- **Economic Inclusion**: Giving digital identities to Kenyan smallholder farmers.
+VeriPath is an **Open Source** supply chain transparency tool designed for climate-resilient tracking. 
 
-## 🛠 Tech Stack
-- **Engine**: Python 3.13 / Streamlit
-- **Security**: Streamlit-Authenticator (Session-Based)
-- **Data**: SQLite with Immutable Audit Trails
+## Technical Overview
+- **Core:** Python & Streamlit
+- **Automation:** Playwright-ready for data ingestion.
+- **Optimization:** Designed for high-performance mobile use (tested on Samsung Galaxy A25 5G).
 
-## 🚦 Getting Started
-1. `git clone https://github.com/Shankan001/Veripath-core.git`
-2. `pip install -r requirements.txt`
-3. `streamlit run app.py`
+## Setup
+1. Install dependencies: `pip install -r requirements.txt`
+2. Run app: `streamlit run app.py`
+
+## License
+This project is licensed under the MIT Open Source License.
