@@ -1,0 +1,22 @@
+{
+  "josephm": {
+    "username": "josephm",
+    "full_name": "Joseph Memusi",
+    "company": "VeriPath Africa",
+    "role": "admin",
+    "password": "4312dcd9875cae1ebc64bbd6355b9c2e859461c23b506d943a3df989c52dbe85",
+    "salt": "d1b8d02928814fe264f935e117fe65c0705baeacce5c389d5afe6ba556e0b4b2",
+    "created_at": "2026-06-09T10:24:19.016156",
+    "last_login": "2026-06-09T10:24:19.191874"
+  },
+  "shankan": {
+    "username": "shankan",
+    "full_name": "Joseph Memusi",
+    "company": "VeripathAfrica",
+    "role": "admin",
+    "password": "79fe000ec211bf0c1d1019e9f65359cf2d5dbd22e5f21c59e87982aa32129970",
+    "salt": "73760561f0723bc38fe35549a3f09f0cfd85b01a96f5ef7682aaecd9dc4c8239",
+    "created_at": "2026-06-09T10:27:47.682005",
+    "last_login": "2026-06-09T11:16:22.209485"
+  }
+}

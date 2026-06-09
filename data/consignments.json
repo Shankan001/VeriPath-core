@@ -1,0 +1,28 @@
+[
+  {
+    "Consignment_ID": NaN,
+    "Timestamp": NaN,
+    "Farmer_Name": NaN,
+    "Crop_Type": NaN,
+    "KRA_PIN": NaN,
+    "PIN_Valid": NaN,
+    "HS_Code": NaN,
+    "Origin_County": NaN,
+    "Net_Weight_KG": NaN,
+    "FOB_Value_USD": NaN,
+    "Source": NaN
+  },
+  {
+    "Consignment_ID": "VP-20260608192427",
+    "Timestamp": "2026-06-08 19:24",
+    "Farmer_Name": "joseph memusi",
+    "Crop_Type": "Maize",
+    "KRA_PIN": "AEWRER25353",
+    "PIN_Valid": "\u26a0 Pending",
+    "HS_Code": "1005.90",
+    "Origin_County": "Baringo",
+    "Net_Weight_KG": 50000.0,
+    "FOB_Value_USD": 75000.0,
+    "Source": "Manual Entry"
+  }
+]
