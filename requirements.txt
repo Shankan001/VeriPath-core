@@ -1,4 +1,6 @@
 streamlit
-streamlit-authenticator
 pandas
 plotly
+openpyxl
+python-docx
+playwright
