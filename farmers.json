@@ -1,0 +1,21 @@
+{
+  "VP-F7462C4B": {
+    "name": " carren Doe",
+    "phone": "0712345678",
+    "id_number": "12345668",
+    "county": "Kirinyaga",
+    "sub_location": "kutus",
+    "farm_size_ha": 20.0,
+    "crops": [
+      "Mango",
+      "Avocado"
+    ],
+    "hs_codes": {
+      "Mango": "080450",
+      "Avocado": "080440"
+    },
+    "gps": "-0.3031,36.800",
+    "registered_at": "2026-06-14T13:26:33.912539",
+    "status": "Active"
+  }
+}

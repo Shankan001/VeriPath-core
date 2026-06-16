@@ -1,129 +1,208 @@
-# ── EUDR Risk Engine ──────────────────────────────────────────
-# EU Deforestation Regulation (2023/1115) compliance scoring
-# Risk is based on crop sensitivity + county forest cover data
-# Source: Kenya Forest Service + EU JRC Global Forest Watch data
+import streamlit as st
+import json
+import os
+import pandas as pd
+from datetime import datetime
 
-# Crops covered under EUDR (must prove no deforestation post-2020)
-EUDR_REGULATED_CROPS = {
-    "Coffee":         "high",    # Top EU concern — full traceability required
-    "Avocado":        "high",    # Kenya's #1 EU export — high scrutiny
-    "Tea":            "medium",  # Covered but lower deforestation link
-    "Maize":          "medium",  # Covered under soy/feed chain rules
-    "Macadamia Nuts": "medium",  # Tree crop — requires plot-level data
-    "Mango":          "low",     # Covered but low EU import volume
-    "Pineapple":      "low",
-    "Passion Fruit":  "low",
-    "French Beans":   "low",     # Vegetable — lower EUDR risk
-    "Roses":          "exempt",  # NOT covered under EUDR
+LEDGER_DB = "ledger.json"
+
+# ── Constants ──────────────────────────────────────────────────────────────
+EUDR_REGULATED_CROPS = ["Coffee", "Tea", "Maize", "Soy", "Palm Oil", "Cattle", "Cocoa", "Wood"]
+
+EUDR_RULES = {
+    # ── Floriculture — fully exempt ────────────────────────────────────────
+    "Roses":         {"risk": "GREEN", "risk_level": "Exempt", "reason": "Floriculture — not subject to EUDR deforestation rules.", "action": "No EUDR action required. Standard export docs apply."},
+    "Carnations":    {"risk": "GREEN", "risk_level": "Exempt", "reason": "Floriculture — not subject to EUDR deforestation rules.", "action": "No EUDR action required. Standard export docs apply."},
+
+    # ── Vegetables / horticulture — not listed ─────────────────────────────
+    "French Beans":  {"risk": "GREEN", "risk_level": "Low", "reason": "Not a listed EUDR commodity. Standard phytosanitary applies.", "action": "Ensure valid phytosanitary cert and KEPHIS inspection."},
+    "Snow Peas":     {"risk": "GREEN", "risk_level": "Low", "reason": "Not a listed EUDR commodity.", "action": "Ensure valid phytosanitary cert and KEPHIS inspection."},
+    "Spinach":       {"risk": "GREEN", "risk_level": "Low", "reason": "Not a listed EUDR commodity.", "action": "Ensure valid phytosanitary cert and KEPHIS inspection."},
+    "Kale":          {"risk": "GREEN", "risk_level": "Low", "reason": "Not a listed EUDR commodity.", "action": "Ensure valid phytosanitary cert and KEPHIS inspection."},
+    "Capsicum":      {"risk": "GREEN", "risk_level": "Low", "reason": "Not a listed EUDR commodity.", "action": "Ensure valid phytosanitary cert and KEPHIS inspection."},
+    "Tomato":        {"risk": "GREEN", "risk_level": "Low", "reason": "Not a listed EUDR commodity.", "action": "Ensure valid phytosanitary cert and KEPHIS inspection."},
+
+    # ── Fruits — not listed ────────────────────────────────────────────────
+    "Avocado":       {"risk": "GREEN", "risk_level": "Low", "reason": "Not currently a listed EUDR commodity under Reg 2023/1115. Low deforestation risk in Kenya context.", "action": "Maintain farm-level traceability as precaution. Review list updates post-2025."},
+    "Mango":         {"risk": "GREEN", "risk_level": "Low", "reason": "Not a listed EUDR commodity. Compliant under EUDR baseline.", "action": "Standard phytosanitary documentation required."},
+    "Passion Fruit": {"risk": "GREEN", "risk_level": "Low", "reason": "Not a listed EUDR commodity.", "action": "Standard phytosanitary documentation required."},
+    "Pineapple":     {"risk": "GREEN", "risk_level": "Low", "reason": "Not a listed EUDR commodity.", "action": "Standard phytosanitary documentation required."},
+
+    # ── Tree crops ─────────────────────────────────────────────────────────
+    "Macadamia Nuts":{"risk": "GREEN", "risk_level": "Low", "reason": "Tree crop — often increases forest cover. Not listed under EUDR.", "action": "Standard phytosanitary documentation required."},
+    "Macadamia":     {"risk": "GREEN", "risk_level": "Low", "reason": "Tree crop — often increases forest cover. Not listed under EUDR.", "action": "Standard phytosanitary documentation required."},
+
+    # ── EUDR listed commodities — AMBER ────────────────────────────────────
+    "Coffee":        {"risk": "AMBER", "risk_level": "Medium", "reason": "Listed EUDR commodity (Annex I). Farm polygon + satellite no-deforestation proof required for land used after Dec 31 2020.", "action": "Upload farm GPS polygon. Prepare Due Diligence Statement. Register on EU TRACES NT."},
+    "Tea":           {"risk": "AMBER", "risk_level": "Medium", "reason": "Listed EUDR commodity (Annex I). Full farm-level traceability required.", "action": "Upload farm GPS polygon. Prepare Due Diligence Statement. Register on EU TRACES NT."},
+    "Maize":         {"risk": "AMBER", "risk_level": "Medium", "reason": "Listed EUDR commodity (Annex I). Traceability to farm level required for EU market.", "action": "Upload farm GPS polygon. Prepare Due Diligence Statement. Register on EU TRACES NT."},
 }
 
-# County-level deforestation risk index (0.0 - 1.0)
-# Based on Kenya Forest Service 2023 report + Global Forest Watch data
-# High = significant forest loss recorded post-2020
-COUNTY_DEFORESTATION_INDEX = {
-    "Murang'a":       0.82,  # High — Aberdare encroachment
-    "Kirinyaga":      0.78,  # High — Mt Kenya forest edge
-    "Nyeri":          0.75,  # High — Mt Kenya/Aberdare corridor
-    "Meru":           0.72,  # High — Mt Kenya northern slopes
-    "Embu":           0.70,  # High — Mt Kenya southern slopes
-    "Kericho":        0.65,  # Medium-High — tea belt clearing
-    "Bomet":          0.63,
-    "Nandi":          0.60,
-    "Kakamega":       0.58,  # Medium — Western Kenya deforestation
-    "Bungoma":        0.55,
-    "Trans Nzoia":    0.52,
-    "Kiambu":         0.50,
-    "Laikipia":       0.45,
-    "Nakuru":         0.42,
-    "Uasin Gishu":    0.38,
-    "Narok":          0.35,
-    "Machakos":       0.28,
-    "Makueni":        0.25,
-    "Kitui":          0.22,
-    "Kajiado":        0.20,
-    "Nairobi":        0.10,
-    "Mombasa":        0.08,
-    "Kisumu":         0.15,
-    "Kilifi":         0.18,
-    "Kwale":          0.22,
-    "Taita-Taveta":   0.30,
+RISK_SCORE_MAP = {"Exempt": 0, "Low": 1, "Medium": 2, "High": 3}
+
+CHECKLIST = {
+    "GREEN": [
+        "✅ Valid phytosanitary certificate (KEPHIS)",
+        "✅ KRA PIN verified",
+        "✅ KEPHIS inspection passed",
+        "✅ County of origin recorded in VeriPath",
+        "✅ HS code confirmed",
+    ],
+    "AMBER": [
+        "✅ Valid phytosanitary certificate (KEPHIS)",
+        "✅ KRA PIN verified",
+        "✅ KEPHIS inspection passed",
+        "✅ County of origin recorded in VeriPath",
+        "✅ HS code confirmed",
+        "⚠️  Farm GPS polygon uploaded (GeoJSON or KML)",
+        "⚠️  Satellite deforestation check — no clearing post Dec 31 2020",
+        "⚠️  Due Diligence Statement (DDS) prepared",
+        "⚠️  Operator registered on EU TRACES NT system",
+    ],
+    "RED": [
+        "✅ Valid phytosanitary certificate (KEPHIS)",
+        "✅ KRA PIN verified",
+        "✅ KEPHIS inspection passed",
+        "✅ County of origin recorded in VeriPath",
+        "✅ HS code confirmed",
+        "⚠️  Farm GPS polygon uploaded (GeoJSON or KML)",
+        "⚠️  Satellite deforestation check — no clearing post Dec 31 2020",
+        "⚠️  Due Diligence Statement (DDS) prepared",
+        "⚠️  Operator registered on EU TRACES NT system",
+        "🔴  Legal land tenure proof required",
+        "🔴  Independent third-party audit required",
+        "🔴  Legal counsel review before export",
+    ],
 }
-DEFAULT_DEFORESTATION_INDEX = 0.40  # For counties not in the list
 
-def get_eudr_risk(crop: str, county: str) -> dict:
-    """
-    Score a single consignment for EUDR compliance risk.
-    Returns a dict with risk_level, risk_score, badge, and explanation.
-    """
-    crop_risk  = EUDR_REGULATED_CROPS.get(crop, "low")
-    forest_idx = COUNTY_DEFORESTATION_INDEX.get(county, DEFAULT_DEFORESTATION_INDEX)
+RISK_BADGE = {
+    "GREEN": "🟢 GREEN — Compliant",
+    "AMBER": "🟡 AMBER — Action Required",
+    "RED":   "🔴 RED — Do Not Ship Without Legal Review",
+}
 
-    # Exempt crops skip scoring
-    if crop_risk == "exempt":
-        return {
-            "risk_level":   "Exempt",
-            "risk_score":   0.0,
-            "badge":        "⚪ Exempt",
-            "explanation":  f"{crop} is not regulated under EUDR.",
-            "action":       "No due diligence required.",
-        }
-
-    # Weighted score: 60% crop sensitivity, 40% county forest loss
-    crop_weight = {"high": 1.0, "medium": 0.5, "low": 0.2}.get(crop_risk, 0.2)
-    risk_score  = round((crop_weight * 0.6) + (forest_idx * 0.4), 3)
-
-    if risk_score >= 0.65:
-        risk_level  = "High"
-        badge       = "🔴 High Risk"
-        action      = "Full geo-location & plot mapping required before EU export."
-    elif risk_score >= 0.35:
-        risk_level  = "Medium"
-        badge       = "🟡 Medium Risk"
-        action      = "Supplier declaration + county-level forest check required."
-    else:
-        risk_level  = "Low"
-        badge       = "🟢 Low Risk"
-        action      = "Standard due diligence sufficient. No blocking risk."
-
+# ── Core functions required by app.py ─────────────────────────────────────
+def get_eudr_risk(crop: str, county: str = "") -> dict:
+    rule = EUDR_RULES.get(crop, {
+        "risk": "GREEN", "risk_level": "Low",
+        "reason": "Crop not in EUDR regulated list. Standard export documentation applies.",
+        "action": "Standard phytosanitary documentation required."
+    })
+    risk       = rule["risk"]
+    risk_level = rule["risk_level"]
     return {
-        "risk_level":   risk_level,
-        "risk_score":   risk_score,
-        "badge":        badge,
-        "explanation":  f"{crop} ({crop_risk} sensitivity) from {county} (forest index: {forest_idx})",
-        "action":       action,
+        "risk":        risk,
+        "risk_level":  risk_level,
+        "badge":       RISK_BADGE.get(risk, "🟢 GREEN — Compliant"),
+        "explanation": rule["reason"],
+        "action":      rule["action"],
+        "score":       RISK_SCORE_MAP.get(risk_level, 1),
     }
 
-def score_dataframe(df):
-    """
-    Add EUDR_Risk and EUDR_Score columns to a consignment DataFrame.
-    Returns the updated DataFrame.
-    """
-    import pandas as pd
-    if df.empty:
-        return df
-    results = df.apply(
-        lambda row: get_eudr_risk(
-            str(row.get("Crop_Type", "")),
-            str(row.get("Origin_County", ""))
-        ),
-        axis=1
-    )
+def score_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    df["EUDR_Risk"]  = results.apply(lambda r: r["badge"])
-    df["EUDR_Score"] = results.apply(lambda r: r["risk_score"])
-    df["EUDR_Action"]= results.apply(lambda r: r["action"])
+    risks, scores, actions, badges = [], [], [], []
+    for _, row in df.iterrows():
+        crop   = str(row.get("Crop_Type", "")).strip()
+        county = str(row.get("Origin_County", "")).strip()
+        r      = get_eudr_risk(crop, county)
+        label  = {"Low": "🟢 Low Risk", "Medium": "🟡 Medium Risk",
+                  "High": "🔴 High Risk", "Exempt": "⚪ Exempt"}.get(r["risk_level"], "🟢 Low Risk")
+        risks.append(label)
+        scores.append(r["score"])
+        actions.append(r["action"])
+        badges.append(r["badge"])
+    df["EUDR_Risk"]   = risks
+    df["EUDR_Score"]  = scores
+    df["EUDR_Action"] = actions
+    df["EUDR_Badge"]  = badges
     return df
 
-if __name__ == "__main__":
-    tests = [
-        ("Avocado",      "Murang'a"),
-        ("Coffee",       "Nyeri"),
-        ("French Beans", "Nairobi"),
-        ("Roses",        "Kiambu"),
-        ("Tea",          "Kericho"),
-    ]
-    print(f"{'Crop':<16} {'County':<14} {'Badge':<18} {'Score':<8} Action")
-    print("-" * 80)
-    for crop, county in tests:
-        r = get_eudr_risk(crop, county)
-        print(f"{crop:<16} {county:<14} {r['badge']:<18} {r['risk_score']:<8} {r['action'][:40]}")
+# ── Page renderer ──────────────────────────────────────────────────────────
+def load_ledger():
+    if os.path.exists(LEDGER_DB):
+        with open(LEDGER_DB, "r") as f:
+            return json.load(f)
+    return []
+
+def render_eudr_page():
+    st.markdown("# 🌍 EUDR Risk Scorer")
+    st.markdown("<p style='color:#64748b'>EU Deforestation Regulation 2023/1115 — per-consignment compliance risk assessment</p>", unsafe_allow_html=True)
+
+    ledger = load_ledger()
+    tab1, tab2 = st.tabs(["🔍 Score a Consignment", "📊 Ledger Risk Overview"])
+
+    with tab1:
+        st.markdown("### Quick Risk Check")
+        col1, col2 = st.columns(2)
+        with col1:
+            crop        = st.selectbox("Crop / Product", ["— Select —"] + list(EUDR_RULES.keys()))
+        with col2:
+            destination = st.selectbox("Destination Market", ["European Union", "United Kingdom", "USA", "Middle East", "Other"])
+        has_gps = st.checkbox("Farm GPS polygon recorded?")
+        has_dds = st.checkbox("Due Diligence Statement (DDS) prepared?")
+
+        if crop != "— Select —":
+            result = get_eudr_risk(crop)
+            risk   = result["risk"]
+
+            # Escalate AMBER → RED if going to EU without GPS/DDS
+            if risk == "AMBER" and destination == "European Union" and (not has_gps or not has_dds):
+                risk = "RED"
+
+            color  = {"GREEN": "#4ade80", "AMBER": "#fbbf24", "RED": "#f87171"}.get(risk, "#4ade80")
+            border = {"GREEN": "#16a34a", "AMBER": "#d97706", "RED": "#dc2626"}.get(risk, "#16a34a")
+            bg     = {"GREEN": "#071a0f", "AMBER": "#1a1400", "RED": "#1a0a0a"}.get(risk, "#071a0f")
+            icon   = {"GREEN": "🟢", "AMBER": "🟡", "RED": "🔴"}.get(risk, "🟢")
+
+            st.markdown(f"""
+            <div style='background:{bg};border:2px solid {border};border-radius:12px;padding:18px 22px;margin:14px 0'>
+                <div style='font-size:1.4rem;font-weight:700;font-family:Space Mono,monospace;color:{color}'>{icon} {risk} — {result["risk_level"].upper()} RISK</div>
+                <div style='color:#94a3b8;font-size:0.88rem;margin-top:8px'>{EUDR_RULES[crop]["reason"]}</div>
+                <div style='color:#e8eaf0;font-size:0.9rem;margin-top:10px'>⚡ <b>Required action:</b> {EUDR_RULES[crop]["action"]}</div>
+                <div style='color:#64748b;font-size:0.8rem;margin-top:8px'>EUDR Score: {result["score"]} / 3</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown("#### Compliance Checklist")
+            for item in CHECKLIST[risk]:
+                st.markdown(
+                    f"<div style='padding:5px 0;font-size:0.9rem;color:#e8eaf0'>{item}</div>",
+                    unsafe_allow_html=True
+                )
+
+            if destination != "European Union":
+                st.info(f"ℹ️ EUDR rules apply specifically to EU market exports. For **{destination}**, standard phytosanitary and bilateral trade requirements apply.")
+
+    with tab2:
+        if not ledger:
+            st.info("No packhouse ledger entries yet. Complete a packhouse intake session first.")
+        else:
+            df          = pd.DataFrame(ledger)
+            risk_counts = df["eudr_risk"].value_counts().to_dict() if "eudr_risk" in df.columns else {}
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.markdown(f"""<div class='metric-card' style='border-color:#16a34a'>
+                    <div class='metric-label'>🟢 GREEN</div>
+                    <div class='metric-value' style='color:#4ade80'>{risk_counts.get("GREEN", 0)}</div>
+                </div>""", unsafe_allow_html=True)
+            with col2:
+                st.markdown(f"""<div class='metric-card' style='border-color:#d97706'>
+                    <div class='metric-label'>🟡 AMBER</div>
+                    <div class='metric-value' style='color:#fbbf24'>{risk_counts.get("AMBER", 0)}</div>
+                </div>""", unsafe_allow_html=True)
+            with col3:
+                st.markdown(f"""<div class='metric-card' style='border-color:#dc2626'>
+                    <div class='metric-label'>🔴 RED</div>
+                    <div class='metric-value' style='color:#f87171'>{risk_counts.get("RED", 0)}</div>
+                </div>""", unsafe_allow_html=True)
+
+            st.markdown("---")
+            display_cols = ["timestamp", "farmer_name", "county", "crop", "hs_code", "weight_kg", "eudr_risk", "grade", "packhouse", "status"]
+            available    = [c for c in display_cols if c in df.columns]
+            st.dataframe(df[available], use_container_width=True)
+
+            csv = df.to_csv(index=False).encode("utf-8")
+            st.download_button("⬇ Download Packhouse Ledger CSV", data=csv,
+                file_name=f"VeriPath_EUDR_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv")

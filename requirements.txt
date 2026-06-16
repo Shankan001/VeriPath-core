@@ -4,3 +4,6 @@ plotly
 openpyxl
 python-docx
 playwright
+qrcode[pil]
+Pillow
+reportlab

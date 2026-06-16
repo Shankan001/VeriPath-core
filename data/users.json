@@ -7,7 +7,10 @@
     "password": "4312dcd9875cae1ebc64bbd6355b9c2e859461c23b506d943a3df989c52dbe85",
     "salt": "d1b8d02928814fe264f935e117fe65c0705baeacce5c389d5afe6ba556e0b4b2",
     "created_at": "2026-06-09T10:24:19.016156",
-    "last_login": "2026-06-09T10:24:19.191874"
+    "last_login": "2026-06-09T10:24:19.191874",
+    "subscription_tier": "trial",
+    "containers_used": 0,
+    "invite_code_used": "LEGACY"
   },
   "shankan": {
     "username": "shankan",
@@ -17,6 +20,36 @@
     "password": "79fe000ec211bf0c1d1019e9f65359cf2d5dbd22e5f21c59e87982aa32129970",
     "salt": "73760561f0723bc38fe35549a3f09f0cfd85b01a96f5ef7682aaecd9dc4c8239",
     "created_at": "2026-06-09T10:27:47.682005",
-    "last_login": "2026-06-09T11:16:22.209485"
+    "last_login": "2026-06-16T22:06:58.919132",
+    "subscription_tier": "Green Channel",
+    "containers_used": 0,
+    "invite_code_used": "LEGACY",
+    "tier_set_at": "2026-06-16T22:05:52.057183"
+  },
+  "jane": {
+    "username": "jane",
+    "full_name": "jane wanjiku",
+    "company": "Kakuzi",
+    "role": "record_keeper",
+    "password": "72b0998d4fef51208fb824cff917d39ad7ddd61ddea069cdc56771902636937b",
+    "salt": "326584c9f78dec4f6586c1128dac3a168f6b3bad6c84e9f52629ba532082844b",
+    "created_at": "2026-06-15T16:22:57.138795",
+    "last_login": "2026-06-15T16:23:15.434527",
+    "subscription_tier": "trial",
+    "containers_used": 0,
+    "invite_code_used": "LEGACY"
+  },
+  "john": {
+    "username": "john",
+    "full_name": "john doe",
+    "company": "Kakuzi",
+    "role": "compliance_officer",
+    "password": "e458c187b81cf4c3ca6880492d8857b3ac03f65e3b9f616c0a370fcabd12a847",
+    "salt": "d7cb89a34d042c166dba3f26cfccc76c25e8404f9c3c8a9394aed28e45b632f6",
+    "created_at": "2026-06-15T16:30:07.213398",
+    "last_login": "2026-06-15T16:30:24.341487",
+    "subscription_tier": "trial",
+    "containers_used": 0,
+    "invite_code_used": "LEGACY"
   }
 }
