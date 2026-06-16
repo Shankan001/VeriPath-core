@@ -3,6 +3,7 @@ import os
 import hashlib
 import secrets
 from datetime import datetime
+from invite_codes import validate_invite_code, consume_invite_code
 
 DATA_DIR   = "data"
 USERS_FILE = os.path.join(DATA_DIR, "users.json")
@@ -41,29 +42,58 @@ def _save_users(users: dict) -> None:
         json.dump(users, f, indent=2)
 
 def register_user(username: str, password: str,
-                  full_name: str, company: str, role: str = "exporter") -> tuple[bool, str]:
+                  full_name: str, company: str,
+                  role: str = "exporter",
+                  invite_code: str = "") -> tuple[bool, str]:
+    """
+    Register a new user.
+    invite_code is required and must match the requested role.
+    """
     username = username.strip().lower()
+
+    # ── Basic field validation ────────────────────────────────
     if not username or not password:
         return False, "Username and password are required."
     if len(password) < 8:
         return False, "Password must be at least 8 characters."
     if len(username) < 3:
         return False, "Username must be at least 3 characters."
+
+    # ── Invite code validation ────────────────────────────────
+    if not invite_code or not invite_code.strip():
+        return False, "An invite code is required to register."
+    code_ok, code_msg, code_role = validate_invite_code(invite_code.strip().upper())
+    if not code_ok:
+        return False, f"Invite code error: {code_msg}"
+    if code_role != role:
+        return False, (f"Invite code is for '{code_role}' role, "
+                       f"but you selected '{role}'. Use the correct code.")
+
+    # ── Duplicate check ───────────────────────────────────────
     users = _load_users()
     if username in users:
         return False, "Username already exists. Please choose another."
+
+    # ── Create user ───────────────────────────────────────────
     hashed, salt = _hash_password(password)
     users[username] = {
-        "username":   username,
-        "full_name":  full_name.strip(),
-        "company":    company.strip(),
-        "role":       role,
-        "password":   hashed,
-        "salt":       salt,
-        "created_at": datetime.utcnow().isoformat(),
-        "last_login": None,
+        "username":          username,
+        "full_name":         full_name.strip(),
+        "company":           company.strip(),
+        "role":              role,
+        "password":          hashed,
+        "salt":              salt,
+        "created_at":        datetime.utcnow().isoformat(),
+        "last_login":        None,
+        "invite_code_used":  invite_code.strip().upper(),
+        "subscription_tier": "trial",
+        "containers_used":   0,
     }
     _save_users(users)
+
+    # ── Consume the code so it can't be reused ────────────────
+    consume_invite_code(invite_code.strip().upper(), username)
+
     return True, f"Account created for {full_name}."
 
 def login_user(username: str, password: str) -> tuple[bool, str, dict | None]:
@@ -83,9 +113,13 @@ def get_user_count() -> int:
     return len(_load_users())
 
 if __name__ == "__main__":
+    from invite_codes import generate_invite_code, seed_admin_code
     if os.path.exists(USERS_FILE):
         os.remove(USERS_FILE)
-    ok, msg = register_user("josephm", "Veri2025!", "Joseph Memusi", "VeriPath Africa", "admin")
+    # Seed an admin code, then register using it
+    admin_code = seed_admin_code()
+    ok, msg = register_user("josephm", "Veri2025!", "Joseph Memusi",
+                            "VeriPath Africa", "admin", admin_code)
     print(f"Register: {ok} — {msg}")
     ok, msg, profile = login_user("josephm", "Veri2025!")
     print(f"Login:    {ok} — {msg}")
