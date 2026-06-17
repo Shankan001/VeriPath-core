@@ -1,234 +1,184 @@
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 
-DATA_DIR   = "data"
-USERS_FILE = os.path.join(DATA_DIR, "users.json")
-KPI_FILE   = os.path.join(DATA_DIR, "kpi_overrides.json")
+DATA_DIR        = "data"
+COMPANIES_FILE  = os.path.join(DATA_DIR, "companies.json")
+USERS_FILE      = os.path.join(DATA_DIR, "users.json")
+KPI_FILE        = os.path.join(DATA_DIR, "kpi_overrides.json")
 
-# ── Tier prices in KES ────────────────────────────────────────
 TIER_PRICES_KES = {
-    "Starter":      2_500,
-    "Growth":       7_500,
-    "Enterprise":  18_000,
-    "Green Channel":35_000,
-    "trial":            0,
+    "Starter":       2_500,
+    "Growth":       20_000,
+    "Enterprise":   65_000,
+    "Green Channel":150_000,
+    "trial":              0,
 }
 
-def _load_users() -> dict:
-    if not os.path.exists(USERS_FILE):
+def _load(path):
+    if not os.path.exists(path):
         return {}
     try:
-        with open(USERS_FILE, "r") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return {}
-
-def _load_kpi_overrides() -> dict:
-    """Admin can manually set CAC/LTV if they have external data."""
-    if not os.path.exists(KPI_FILE):
-        return {}
-    try:
-        with open(KPI_FILE, "r") as f:
+        with open(path) as f:
             return json.load(f)
     except:
         return {}
 
-def _save_kpi_overrides(data: dict):
+def _save_kpi_overrides(data):
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(KPI_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
 def compute_kpis() -> dict:
-    """
-    Compute all KPIs from live user data.
-    Returns dict of KPI name → value + meta.
-    """
-    users     = _load_users()
-    overrides = _load_kpi_overrides()
-    now       = datetime.utcnow()
+    companies = _load(COMPANIES_FILE)
+    overrides = _load(KPI_FILE)
+    now       = datetime.now(timezone.utc)
 
-    paying = [u for u in users.values() if u.get("subscription_tier","trial") != "trial"]
-    trial  = [u for u in users.values() if u.get("subscription_tier","trial") == "trial"]
-    total  = len(users)
+    paying = [c for c in companies.values()
+              if c.get("subscription_tier","trial") not in ("trial","expired_paid")]
+    trial  = [c for c in companies.values()
+              if c.get("subscription_tier","trial") == "trial"]
 
     # ── MRR ──────────────────────────────────────────────────
-    mrr = sum(TIER_PRICES_KES.get(u.get("subscription_tier","trial"), 0) for u in users.values())
+    mrr = sum(TIER_PRICES_KES.get(c.get("subscription_tier","trial"), 0)
+              for c in companies.values())
 
     # ── ARR ──────────────────────────────────────────────────
     arr = mrr * 12
 
     # ── Churn ────────────────────────────────────────────────
-    # Count users who were paying last month but downgraded/left
-    # We store tier_set_at — if set > 30d ago and still paying = retained
-    churned = 0
-    retained = 0
-    thirty_days_ago = now - timedelta(days=30)
-    for u in paying:
-        tier_set = u.get("tier_set_at")
-        if tier_set:
-            set_dt = datetime.fromisoformat(tier_set)
-            if set_dt < thirty_days_ago:
-                retained += 1
-    # Churn rate = churned / (churned + retained) × 100
-    churn_denominator = churned + retained
-    churn_rate = round((churned / churn_denominator * 100), 1) if churn_denominator else 0.0
+    churn_rate = overrides.get("churn_rate_pct", 0.0)
 
-    # ── CAC (Cost per Acquired Customer) ─────────────────────
-    # Default: use override if admin set it, else estimate KES 500 per paid user
-    cac = overrides.get("cac_kes", 500)
+    # ── CAC ──────────────────────────────────────────────────
+    cac = overrides.get("cac_kes", 5_000)
 
-    # ── LTV (Lifetime Value) ──────────────────────────────────
-    # LTV = (MRR per customer) / monthly_churn_rate
-    avg_mrr_per_customer = (mrr / len(paying)) if paying else 0
-    monthly_churn_decimal = (churn_rate / 100) if churn_rate > 0 else 0.01  # avoid /0
-    ltv = round(avg_mrr_per_customer / monthly_churn_decimal, 0)
+    # ── LTV ──────────────────────────────────────────────────
+    avg_mrr = (mrr / len(paying)) if paying else 0
+    monthly_churn = (churn_rate / 100) if churn_rate > 0 else 0.01
+    ltv = round(avg_mrr / monthly_churn, 0)
 
-    # ── LTV:CAC ratio ─────────────────────────────────────────
     ltv_cac = round(ltv / cac, 1) if cac > 0 else 0
 
     # ── Tier breakdown ────────────────────────────────────────
     tier_breakdown = {}
-    for u in users.values():
-        t = u.get("subscription_tier", "trial")
+    for c in companies.values():
+        t = c.get("subscription_tier", "trial")
         tier_breakdown[t] = tier_breakdown.get(t, 0) + 1
 
+    # ── User count ────────────────────────────────────────────
+    users = _load(USERS_FILE)
+
     return {
-        "mrr":              mrr,
-        "arr":              arr,
-        "total_users":      total,
-        "paying_users":     len(paying),
-        "trial_users":      len(trial),
-        "churn_rate":       churn_rate,
-        "cac_kes":          cac,
-        "ltv_kes":          int(ltv),
-        "ltv_cac_ratio":    ltv_cac,
-        "tier_breakdown":   tier_breakdown,
-        "computed_at":      now.strftime("%d %b %Y %H:%M UTC"),
+        "mrr":             mrr,
+        "arr":             arr,
+        "total_companies": len(companies),
+        "paying_companies":len(paying),
+        "trial_companies": len(trial),
+        "total_users":     len(users),
+        "churn_rate":      churn_rate,
+        "cac_kes":         cac,
+        "ltv_kes":         int(ltv),
+        "ltv_cac_ratio":   ltv_cac,
+        "tier_breakdown":  tier_breakdown,
+        "computed_at":     now.strftime("%d %b %Y %H:%M UTC"),
     }
 
 def render_kpi_dashboard(profile: dict):
-    """Full admin-only KPI tab. Call from app.py page router."""
     import streamlit as st
+    import pandas as pd
+    from trial import set_company_subscription, list_all_companies
 
     if profile.get("role") != "admin":
-        st.error("🔒 Access Denied. This tab is for Admins only.")
+        st.error("🔒 Access Denied. Admin only.")
         st.stop()
 
     st.markdown("# 📈 Business Intelligence Dashboard")
-    st.markdown("<p style='color:#64748b'>Admin-only · Live metrics from user database</p>",
+    st.markdown("<p style='color:#64748b'>Admin · Company-level subscriptions · Live data</p>",
                 unsafe_allow_html=True)
 
     kpis = compute_kpis()
+    overrides = _load(KPI_FILE)
 
-    # ── Top KPI Cards ─────────────────────────────────────────
     st.markdown("---")
     st.markdown("<div style='font-family:Space Mono,monospace;font-size:0.75rem;"
                 "color:#64748b;letter-spacing:0.1em;text-transform:uppercase;"
                 "margin-bottom:12px'>Revenue Metrics</div>", unsafe_allow_html=True)
 
-    col1, col2, col3, col4 = st.columns(4)
-    _kpi_card(col1, "MRR",
-              f"KES {kpis['mrr']:,}",
-              "Monthly Recurring Revenue",
-              "#38bdf8")
-    _kpi_card(col2, "ARR",
-              f"KES {kpis['arr']:,}",
-              "Annual Recurring Revenue",
-              "#818cf8")
-    _kpi_card(col3, "CAC",
-              f"KES {kpis['cac_kes']:,}",
-              "Cost to Acquire Customer",
-              "#fb923c")
-    _kpi_card(col4, "LTV",
-              f"KES {kpis['ltv_kes']:,}",
-              "Customer Lifetime Value",
-              "#4ade80")
+    c1, c2, c3, c4 = st.columns(4)
+    _kpi_card(c1, "MRR",  f"KES {kpis['mrr']:,}",         "Monthly Recurring Revenue", "#38bdf8")
+    _kpi_card(c2, "ARR",  f"KES {kpis['arr']:,}",         "Annual Recurring Revenue",  "#818cf8")
+    _kpi_card(c3, "CAC",  f"KES {kpis['cac_kes']:,}",     "Cost to Acquire Customer",  "#fb923c")
+    _kpi_card(c4, "LTV",  f"KES {kpis['ltv_kes']:,}",     "Customer Lifetime Value",   "#4ade80")
 
     st.markdown("---")
     st.markdown("<div style='font-family:Space Mono,monospace;font-size:0.75rem;"
                 "color:#64748b;letter-spacing:0.1em;text-transform:uppercase;"
-                "margin-bottom:12px'>User & Health Metrics</div>", unsafe_allow_html=True)
+                "margin-bottom:12px'>Company & Health Metrics</div>", unsafe_allow_html=True)
 
-    col5, col6, col7, col8 = st.columns(4)
-    _kpi_card(col5, "Total Users",
-              str(kpis["total_users"]),
-              "All registered accounts",
-              "#e2e8f0")
-    _kpi_card(col6, "Paying Users",
-              str(kpis["paying_users"]),
-              "Active subscriptions",
-              "#4ade80")
-    _kpi_card(col7, "Churn Rate",
-              f"{kpis['churn_rate']}%",
-              "Monthly customer churn",
+    c5, c6, c7, c8 = st.columns(4)
+    _kpi_card(c5, "Companies",    str(kpis["total_companies"]),  "Total onboarded",        "#e2e8f0")
+    _kpi_card(c6, "Paying",       str(kpis["paying_companies"]), "Active subscriptions",   "#4ade80")
+    _kpi_card(c7, "Churn Rate",   f"{kpis['churn_rate']}%",      "Monthly churn",
               "#f87171" if kpis["churn_rate"] > 5 else "#4ade80")
-    _kpi_card(col8, "LTV : CAC",
-              f"{kpis['ltv_cac_ratio']} : 1",
-              "Healthy if > 3:1",
+    _kpi_card(c8, "LTV : CAC",    f"{kpis['ltv_cac_ratio']} : 1","Healthy if > 3:1",
               "#4ade80" if kpis["ltv_cac_ratio"] >= 3 else "#fbbf24")
 
-    # ── Tier Breakdown ────────────────────────────────────────
+    # ── Company table ─────────────────────────────────────────
     st.markdown("---")
     st.markdown("<div style='font-family:Space Mono,monospace;font-size:0.75rem;"
                 "color:#64748b;letter-spacing:0.1em;text-transform:uppercase;"
-                "margin-bottom:12px'>Subscription Tier Breakdown</div>", unsafe_allow_html=True)
-
-    import pandas as pd
-    breakdown = kpis["tier_breakdown"]
-    if breakdown:
-        tier_df = pd.DataFrame([
-            {
-                "Tier":    tier,
-                "Users":   count,
-                "MRR (KES)": TIER_PRICES_KES.get(tier, 0) * count,
-            }
-            for tier, count in sorted(breakdown.items(), key=lambda x: -TIER_PRICES_KES.get(x[0],0))
-        ])
-        tier_df["MRR (KES)"] = tier_df["MRR (KES)"].apply(lambda x: f"KES {x:,}")
-        st.dataframe(tier_df, use_container_width=True, hide_index=True)
+                "margin-bottom:12px'>All Companies</div>", unsafe_allow_html=True)
+    companies_list = list_all_companies()
+    if companies_list:
+        df = pd.DataFrame(companies_list)
+        st.dataframe(df, use_container_width=True, hide_index=True)
     else:
-        st.info("No users yet.")
+        st.info("No companies registered yet.")
 
-    # ── CAC Override ──────────────────────────────────────────
+    # ── Upgrade company ───────────────────────────────────────
+    st.markdown("---")
+    st.markdown("<div style='font-family:Space Mono,monospace;font-size:0.75rem;"
+                "color:#64748b;letter-spacing:0.1em;text-transform:uppercase;"
+                "margin-bottom:12px'>Upgrade Company Subscription</div>", unsafe_allow_html=True)
+
+    company_names = [c["Company"] for c in companies_list] if companies_list else []
+    if company_names:
+        with st.form("upgrade_company_form"):
+            target_company = st.selectbox("Select Company", company_names)
+            new_tier       = st.selectbox("New Tier",
+                                ["Starter","Growth","Enterprise","Green Channel"])
+            months         = st.number_input("Months", min_value=1, max_value=12, value=1)
+            col_p, col_b   = st.columns([2,1])
+            price          = TIER_PRICES_KES.get(new_tier, 0) * months
+            col_p.markdown(f"**Total: KES {price:,}** ({months} month{'s' if months>1 else ''})")
+            if col_b.form_submit_button("⬆️ Apply Upgrade", use_container_width=True):
+                ok = set_company_subscription(target_company, new_tier, months)
+                if ok:
+                    st.success(f"✅ {target_company} upgraded to {new_tier} for {months} month(s). "
+                               f"All users at this company now have full access.")
+                    st.rerun()
+                else:
+                    st.error("❌ Upgrade failed.")
+    else:
+        st.info("No companies to upgrade yet.")
+
+    # ── Admin overrides ───────────────────────────────────────
     st.markdown("---")
     st.markdown("<div style='font-family:Space Mono,monospace;font-size:0.75rem;"
                 "color:#64748b;letter-spacing:0.1em;text-transform:uppercase;"
                 "margin-bottom:12px'>Admin Overrides</div>", unsafe_allow_html=True)
-
-    overrides = _load_kpi_overrides()
-    with st.form("cac_override_form"):
-        new_cac = st.number_input(
-            "Set CAC (KES) — your actual cost per customer acquired",
-            min_value=0, max_value=500_000,
-            value=overrides.get("cac_kes", 500), step=100
-        )
-        if st.form_submit_button("💾 Save CAC Override", use_container_width=True):
-            overrides["cac_kes"] = new_cac
+    with st.form("overrides_form"):
+        col_a, col_b = st.columns(2)
+        new_cac   = col_a.number_input("CAC (KES)", min_value=0, max_value=500_000,
+                                        value=overrides.get("cac_kes", 5_000), step=500)
+        new_churn = col_b.number_input("Monthly Churn Rate (%)", min_value=0.0, max_value=100.0,
+                                        value=float(overrides.get("churn_rate_pct", 0.0)), step=0.1)
+        if st.form_submit_button("💾 Save Overrides", use_container_width=True):
+            overrides["cac_kes"]        = new_cac
+            overrides["churn_rate_pct"] = new_churn
             _save_kpi_overrides(overrides)
-            st.success(f"✅ CAC updated to KES {new_cac:,}. LTV:CAC will recalculate.")
+            st.success("✅ Overrides saved.")
             st.rerun()
-
-    # ── Subscription Management ───────────────────────────────
-    st.markdown("---")
-    st.markdown("<div style='font-family:Space Mono,monospace;font-size:0.75rem;"
-                "color:#64748b;letter-spacing:0.1em;text-transform:uppercase;"
-                "margin-bottom:12px'>Upgrade User Subscription</div>", unsafe_allow_html=True)
-
-    users = _load_users()
-    user_list = list(users.keys())
-    if user_list:
-        with st.form("upgrade_form"):
-            target_user = st.selectbox("Select User", user_list)
-            new_tier    = st.selectbox("New Tier", ["Starter","Growth","Enterprise","Green Channel"])
-            if st.form_submit_button("⬆️ Apply Upgrade", use_container_width=True):
-                from trial import set_subscription_tier
-                ok = set_subscription_tier(target_user, new_tier)
-                if ok:
-                    st.success(f"✅ {target_user} upgraded to {new_tier}.")
-                    st.rerun()
-                else:
-                    st.error("❌ Upgrade failed.")
 
     st.markdown(f"""
     <div style='margin-top:20px;text-align:right;color:#334155;font-size:0.7rem;
@@ -237,7 +187,7 @@ def render_kpi_dashboard(profile: dict):
     </div>
     """, unsafe_allow_html=True)
 
-def _kpi_card(col, label: str, value: str, sub: str, color: str):
+def _kpi_card(col, label, value, sub, color):
     import streamlit as st
     with col:
         st.markdown(f"""
