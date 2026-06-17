@@ -128,7 +128,7 @@ def render_kpi_dashboard(profile: dict):
     st.markdown("<div style='font-family:Space Mono,monospace;font-size:0.75rem;"
                 "color:#64748b;letter-spacing:0.1em;text-transform:uppercase;"
                 "margin-bottom:12px'>All Companies</div>", unsafe_allow_html=True)
-    companies_list = list_all_companies()
+    companies_list = list_all_companies(exporters_only=True)
     if companies_list:
         df = pd.DataFrame(companies_list)
         st.dataframe(df, use_container_width=True, hide_index=True)
