@@ -1,0 +1,26 @@
+{
+  "veripath africa": {
+    "company_name": "VeriPath Africa",
+    "subscription_tier": "trial",
+    "trial_started_at": "2026-06-09T10:24:19.016156",
+    "tier_set_at": null,
+    "tier_expires_at": null,
+    "containers_used": 0
+  },
+  "veripathafrica": {
+    "company_name": "VeripathAfrica",
+    "subscription_tier": "trial",
+    "trial_started_at": "2026-06-09T10:27:47.682005",
+    "tier_set_at": null,
+    "tier_expires_at": null,
+    "containers_used": 0
+  },
+  "kakuzi": {
+    "company_name": "Kakuzi",
+    "subscription_tier": "trial",
+    "trial_started_at": "2026-06-15T16:22:57.138795",
+    "tier_set_at": null,
+    "tier_expires_at": null,
+    "containers_used": 0
+  }
+}
