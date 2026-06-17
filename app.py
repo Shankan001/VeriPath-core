@@ -19,6 +19,8 @@ from kpi_dashboard   import render_kpi_dashboard
 from invite_codes    import generate_invite_code, list_invite_codes, ROLE_PREFIXES
 
 load_dotenv()
+from data_init import ensure_data_files
+ensure_data_files()
 
 st.set_page_config(page_title="VeriPath Africa | Enterprise", layout="wide", initial_sidebar_state="expanded")
 
