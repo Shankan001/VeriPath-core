@@ -207,10 +207,21 @@ def reset_monthly_usage(company_name: str) -> None:
         companies[key]["containers_used"] = 0
         _save_companies(companies)
 
-def list_all_companies() -> list[dict]:
-    companies = _load_companies()
+def list_all_companies(exporters_only: bool = False) -> list[dict]:
+    companies  = _load_companies()
+    users      = _load_users()
+
+    # Build set of companies that have at least one exporter registered
+    exporter_companies = {
+        _normalize_company(u.get("company", ""))
+        for u in users.values()
+        if u.get("role") == "exporter"
+    }
+
     result = []
     for key, rec in companies.items():
+        if exporters_only and key not in exporter_companies:
+            continue
         result.append({
             "Company":     rec.get("company_name", key),
             "Tier":        rec.get("subscription_tier", "trial"),
