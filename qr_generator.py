@@ -6,8 +6,7 @@ import uuid
 from datetime import datetime
 from io import BytesIO
 from PIL import Image
-
-FARMERS_DB = "farmers.json"
+from ledger_db import load_farmers, save_farmers
 
 KENYA_COUNTIES = [
     "Baringo","Bomet","Bungoma","Busia","Elgeyo-Marakwet","Embu","Garissa",
@@ -20,47 +19,29 @@ KENYA_COUNTIES = [
 ]
 
 CROP_HS_CODES = {
-    "Avocado": "080440",
-    "French Beans": "070820",
-    "Roses": "060311",
-    "Carnations": "060312",
-    "Mango": "080450",
-    "Passion Fruit": "081090",
-    "Macadamia": "080251",
-    "Tea": "090210",
-    "Coffee": "090111",
-    "Spinach": "070970",
-    "Kale": "070499",
-    "Capsicum": "070960",
-    "Tomato": "070200",
-    "Snow Peas": "071021",
+    "Avocado": "080440", "French Beans": "070820", "Roses": "060311",
+    "Carnations": "060312", "Mango": "080450", "Passion Fruit": "081090",
+    "Macadamia Nuts": "080251", "Tea": "090210", "Coffee": "090111",
+    "Spinach": "070970", "Kale": "070499", "Capsicum": "070960",
+    "Tomato": "070200", "Snow Peas": "071021", "Pineapple": "080430",
+    "Maize": "100590",
 }
-
-def load_farmers():
-    if os.path.exists(FARMERS_DB):
-        with open(FARMERS_DB, "r") as f:
-            return json.load(f)
-    return {}
-
-def save_farmers(farmers):
-    with open(FARMERS_DB, "w") as f:
-        json.dump(farmers, f, indent=2)
 
 def generate_qr(farmer_id, farmer_data):
     payload = json.dumps({
-        "id": farmer_id,
-        "name": farmer_data["name"],
-        "phone": farmer_data["phone"],
-        "county": farmer_data["county"],
-        "crops": farmer_data["crops"],
-        "gps": farmer_data.get("gps", ""),
-        "registered": farmer_data["registered_at"]
+        "id":         farmer_id,
+        "name":       farmer_data["name"],
+        "phone":      farmer_data["phone"],
+        "county":     farmer_data["county"],
+        "crops":      farmer_data["crops"],
+        "gps":        farmer_data.get("gps",""),
+        "company":    farmer_data.get("company",""),
+        "registered": farmer_data["registered_at"],
     })
     qr = qrcode.QRCode(
         version=1,
         error_correction=qrcode.constants.ERROR_CORRECT_H,
-        box_size=8,
-        border=3,
+        box_size=8, border=3,
     )
     qr.add_data(payload)
     qr.make(fit=True)
@@ -70,117 +51,111 @@ def generate_qr(farmer_id, farmer_data):
     buf.seek(0)
     return buf
 
-def render_qr_page():
-    st.markdown("""
-    <style>
-    .vp-header {
-        background: linear-gradient(135deg, #1a6b3c 0%, #2d9e5f 100%);
-        color: white;
-        padding: 20px 24px;
-        border-radius: 12px;
-        margin-bottom: 24px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+def render_qr_page(profile: dict = None):
+    company = profile.get("company","") if profile else ""
 
     st.markdown("""
-    <div class="vp-header">
-        <h2 style="margin:0;font-size:1.4rem;">🌿 Outgrower Registry</h2>
-        <p style="margin:6px 0 0;opacity:0.85;font-size:0.9rem;">Register farmers · Generate QR cards · Link to packhouse</p>
+    <div style='background:linear-gradient(135deg,#1a6b3c 0%,#2d9e5f 100%);
+                color:white;padding:20px 24px;border-radius:12px;margin-bottom:24px'>
+        <h2 style='margin:0;font-size:1.4rem'>🌿 Outgrower Registry</h2>
+        <p style='margin:6px 0 0;opacity:0.85;font-size:0.9rem'>
+            Register farmers · Generate QR cards · Link to packhouse
+        </p>
     </div>
     """, unsafe_allow_html=True)
 
-    farmers = load_farmers()
+    farmers = load_farmers(company)
     tab1, tab2 = st.tabs(["➕ Register Farmer", "📋 View All Farmers"])
 
     with tab1:
         st.markdown("### New Outgrower Registration")
         col1, col2 = st.columns(2)
         with col1:
-            name = st.text_input("Full Name *", placeholder="e.g. Jane Wanjiku")
-            phone = st.text_input("Phone Number *", placeholder="+254712345678")
-            id_number = st.text_input("National ID Number", placeholder="12345678")
+            name         = st.text_input("Full Name *", placeholder="Jane Wanjiku")
+            phone        = st.text_input("Phone Number *", placeholder="+254712345678")
+            id_number    = st.text_input("National ID Number", placeholder="12345678")
         with col2:
-            county = st.selectbox("County *", ["— Select —"] + KENYA_COUNTIES)
+            county       = st.selectbox("County *", ["— Select —"] + KENYA_COUNTIES)
             sub_location = st.text_input("Sub-location / Village", placeholder="e.g. Ol Kalou")
-            farm_size_ha = st.number_input("Farm Size (hectares)", min_value=0.1, max_value=500.0, value=1.0, step=0.1)
+            farm_size_ha = st.number_input("Farm Size (hectares)", min_value=0.1,
+                                            max_value=500.0, value=1.0, step=0.1)
 
-        crops = st.multiselect(
-            "Crops Grown *",
-            options=list(CROP_HS_CODES.keys()),
-            help="Select all crops this farmer grows — they can vary per intake session"
-        )
-        gps = st.text_input("GPS Coordinates (optional)", placeholder="-0.3031, 36.8000")
+        crops = st.multiselect("Crops Grown *", options=list(CROP_HS_CODES.keys()),
+                               help="Select all crops this farmer grows")
+        gps   = st.text_input("GPS Coordinates (optional)", placeholder="-0.3031, 36.8000")
 
         st.markdown("---")
-        if st.button("✅ Register & Generate QR Card", use_container_width=True, type="primary"):
+        if st.button("✅ Register & Generate QR Card",
+                     use_container_width=True, type="primary"):
             if not name or not phone or county == "— Select —" or not crops:
-                st.error("Please fill in all required fields: Name, Phone, County, Crops.")
+                st.error("Fill in all required fields: Name, Phone, County, Crops.")
             else:
-                farmer_id = "VP-" + str(uuid.uuid4())[:8].upper()
+                farmer_id   = "VP-" + str(uuid.uuid4())[:8].upper()
                 farmer_data = {
-                    "name": name,
-                    "phone": phone,
-                    "id_number": id_number,
-                    "county": county,
-                    "sub_location": sub_location,
-                    "farm_size_ha": farm_size_ha,
-                    "crops": crops,
-                    "hs_codes": {c: CROP_HS_CODES[c] for c in crops},
-                    "gps": gps,
+                    "name":          name,
+                    "phone":         phone,
+                    "id_number":     id_number,
+                    "county":        county,
+                    "sub_location":  sub_location,
+                    "farm_size_ha":  farm_size_ha,
+                    "crops":         crops,
+                    "hs_codes":      {c: CROP_HS_CODES[c] for c in crops},
+                    "gps":           gps,
+                    "company":       company,
                     "registered_at": datetime.now().isoformat(),
-                    "status": "Active"
+                    "status":        "Active",
                 }
-                farmers[farmer_id] = farmer_data
-                save_farmers(farmers)
+                all_farmers = load_farmers()
+                all_farmers[farmer_id] = farmer_data
+                from ledger_db import save_farmers as _sf
+                import os, json
+                os.makedirs("data", exist_ok=True)
+                with open(os.path.join("data","farmers.json"),"w") as f:
+                    json.dump(all_farmers, f, indent=2)
 
-                st.success(f"✅ Farmer registered! ID: **{farmer_id}**")
+                st.success(f"✅ Registered! ID: **{farmer_id}**")
                 qr_buf = generate_qr(farmer_id, farmer_data)
-                qr_img = Image.open(qr_buf)
-
-                col_a, col_b = st.columns([1, 1])
+                col_a, col_b = st.columns([1,1])
                 with col_a:
-                    st.image(qr_img, caption=f"QR Card — {name}", width=240)
+                    st.image(Image.open(qr_buf), caption=f"QR — {name}", width=240)
                 with col_b:
                     st.markdown(f"""
-                    **Farmer ID:** `{farmer_id}`
+                    **ID:** `{farmer_id}`
                     **Name:** {name}
                     **Phone:** {phone}
                     **County:** {county}
                     **Farm:** {farm_size_ha} ha
                     **Crops:** {', '.join(crops)}
+                    **Company:** {company}
                     **Registered:** {datetime.now().strftime('%d %b %Y')}
                     """)
                 qr_buf.seek(0)
                 st.download_button(
-                    label="⬇️ Download QR Card (PNG)",
-                    data=qr_buf,
+                    "⬇ Download QR Card (PNG)", data=qr_buf,
                     file_name=f"VeriPath_QR_{farmer_id}.png",
-                    mime="image/png",
-                    use_container_width=True
+                    mime="image/png", use_container_width=True
                 )
 
     with tab2:
         if not farmers:
-            st.info("No farmers registered yet. Use the Register tab to add your first outgrower.")
+            st.info("No farmers registered yet for your company.")
         else:
             st.markdown(f"**{len(farmers)} outgrowers registered**")
             search = st.text_input("🔍 Search by name or ID", placeholder="Jane or VP-...")
             for fid, fdata in farmers.items():
-                if search and search.lower() not in fdata["name"].lower() and search.lower() not in fid.lower():
+                if search and search.lower() not in fdata["name"].lower() \
+                           and search.lower() not in fid.lower():
                     continue
-                with st.expander(f"🧑‍🌾 {fdata['name']}  •  {fid}  •  {fdata['county']}"):
-                    col1, col2 = st.columns([1, 1])
+                with st.expander(f"🧑🌾 {fdata['name']} · {fid} · {fdata['county']}"):
+                    col1, col2 = st.columns([1,1])
                     with col1:
                         qr_buf = generate_qr(fid, fdata)
                         st.image(Image.open(qr_buf), width=200)
                         qr_buf.seek(0)
                         st.download_button(
-                            "⬇️ Download QR",
-                            data=qr_buf,
+                            "⬇ Download QR", data=qr_buf,
                             file_name=f"VeriPath_QR_{fid}.png",
-                            mime="image/png",
-                            key=f"dl_{fid}"
+                            mime="image/png", key=f"dl_{fid}"
                         )
                     with col2:
                         st.markdown(f"""
@@ -194,6 +169,3 @@ def render_qr_page():
                         **Status:** {fdata['status']}
                         **Registered:** {fdata['registered_at'][:10]}
                         """)
-
-if __name__ == "__main__":
-    render_qr_page()
