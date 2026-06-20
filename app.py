@@ -123,6 +123,8 @@ ROLE_PAGES = {
         "📡 Transmit to Portals",
         "🌱 Carbon Tracking",
         "🗺 Origin Map",
+        "👥 My Team",
+        "🗑 Demo Reset",
     ],
     "admin": [
         "📊 Dashboard",
@@ -139,6 +141,8 @@ ROLE_PAGES = {
         "🗺 Origin Map",
         "📈 KPI Dashboard",
         "🔑 Invite Codes",
+        "👥 My Team",
+        "🗑 Demo Reset",
     ],
 }
 
@@ -340,13 +344,13 @@ elif page == "📑 Consignment Ledger":
         st.warning("Ledger is empty.")
 
 elif page == "🌿 Outgrower Registry":
-    render_qr_page()
+    render_qr_page(profile=profile)
 
 elif page == "📦 Packhouse Intake":
-    render_packhouse_page()
+    render_packhouse_page(profile=profile)
 
 elif page == "📅 Daily Batch Reports":
-    render_daily_batch_page()
+    render_daily_batch_page(profile=profile)
 
 elif page == "🔍 Pre-Audit Gate":
     render_pre_audit_page(profile)
@@ -355,7 +359,7 @@ elif page == "🌍 EUDR Risk Scorer":
     render_eudr_page()
 
 elif page == "📄 Compliance PDF":
-    render_compliance_pdf_page()
+    render_compliance_pdf_page(profile=profile)
 
 elif page == "📡 Transmit to Portals":
     st.markdown("# 📡 Transmit to Government Portals")
@@ -447,6 +451,91 @@ elif page == "🔑 Invite Codes":
         st.dataframe(df_codes, use_container_width=True, hide_index=True)
     else:
         st.info("No codes generated yet.")
+
+elif page == "👥 My Team":
+    st.markdown("# 👥 My Team")
+    st.markdown("<p style='color:#64748b'>Generate invite codes for your record keepers and compliance officers</p>", unsafe_allow_html=True)
+    if profile.get("role") not in ("exporter","admin"):
+        st.error("🔒 Exporter or Admin only.")
+        st.stop()
+    st.markdown("---")
+    st.markdown("### Add Team Member")
+    allowed_roles = ["record_keeper","compliance_officer"]
+    col_r, col_g = st.columns([2,1])
+    with col_r:
+        team_role = st.selectbox("Role", allowed_roles,
+                                  format_func=lambda x: "Record Keeper" if x=="record_keeper" else "Compliance Officer")
+    with col_g:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("⚡ Generate Invite Code", use_container_width=True, type="primary"):
+            code = generate_invite_code(team_role, created_by=profile["username"])
+            st.success("✅ Share this code with your team member:")
+            st.code(code, language=None)
+            wa_msg  = f"Hello,+here+is+your+VeriPath+invite+code:+{code}+%0ARegister+at:+your-app-url"
+            wa_link = f"https://wa.me/?text={wa_msg}"
+            st.markdown(f"""
+            <a href="{wa_link}" target="_blank"
+               style='background:#16a34a;color:white;padding:10px 24px;border-radius:8px;
+                      font-family:Space Mono,monospace;font-size:0.85rem;font-weight:700;
+                      text-decoration:none;display:inline-block;margin-top:8px'>
+                📱 Send via WhatsApp
+            </a>""", unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown("### Your Team Members")
+    import json as _json
+    users_path = "data/users.json"
+    if os.path.exists(users_path):
+        with open(users_path) as f:
+            all_users = _json.load(f)
+        company_lower = profile.get("company","").strip().lower()
+        team = [u for u in all_users.values()
+                if u.get("company","").strip().lower() == company_lower
+                and u.get("role") in ("record_keeper","compliance_officer")]
+        if team:
+            import pandas as pd
+            team_df = pd.DataFrame([{
+                "Name":     u["full_name"],
+                "Role":     u["role"].replace("_"," ").title(),
+                "Username": u["username"],
+                "Joined":   u.get("created_at","")[:10],
+            } for u in team])
+            st.dataframe(team_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No team members yet. Generate a code above and share it.")
+
+elif page == "🗑 Demo Reset":
+    st.markdown("# 🗑 Demo Reset")
+    st.markdown("<p style='color:#64748b'>Wipe your company data for a clean demo</p>",
+                unsafe_allow_html=True)
+    if profile.get("role") not in ("exporter","admin"):
+        st.error("🔒 Exporter or Admin only.")
+        st.stop()
+    company = profile.get("company","")
+    st.markdown("---")
+    st.markdown(f"""
+    <div style='background:#1a0a0a;border:2px solid #dc2626;border-radius:12px;
+                padding:20px 24px;margin-bottom:20px'>
+        <div style='font-size:1rem;font-weight:700;color:#f87171'>⚠️ DANGER ZONE</div>
+        <div style='color:#94a3b8;margin-top:6px;font-size:0.9rem'>
+            This will permanently delete all consignment and ledger records for
+            <b style='color:#e8eaf0'>{company}</b>.<br>
+            Farmer registrations and user accounts are NOT deleted.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    confirm = st.text_input(f"Type your company name to confirm: **{company}**")
+    if st.button("🗑 Delete All Company Data", use_container_width=True):
+        if confirm.strip().lower() == company.strip().lower():
+            from ledger_db import clear_company_ledger
+            from db import clear_company_consignments
+            n1 = clear_company_ledger(company)
+            n2 = clear_company_consignments(company)
+            if "ledger_data" in st.session_state:
+                del st.session_state["ledger_data"]
+            st.success(f"✅ Deleted {n1} ledger records and {n2} consignment records for {company}. Ready for demo.")
+            st.rerun()
+        else:
+            st.error("❌ Company name does not match. No data deleted.")
 
 elif page == "🗺 Origin Map":
     st.markdown("# 🗺 Produce Origin Map")
