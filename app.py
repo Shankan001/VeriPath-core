@@ -283,7 +283,10 @@ render_trial_banner(profile["username"], role=profile.get("role", "exporter"))
 if page == "📊 Dashboard":
     st.markdown("# 📊 VeriPath Dashboard")
     st.markdown("<p style='color:#64748b'>Real-time supply chain intelligence</p>", unsafe_allow_html=True)
-    df = st.session_state["ledger_data"]
+    from ledger_db import load_ledger as _ll
+    _company = profile.get("company","") if role != "admin" else ""
+    _ledger  = _ll(_company)
+    df = pd.DataFrame(_ledger) if _ledger else pd.DataFrame(columns=LEDGER_COLS)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown(f"""<div class='metric-card'><div class='metric-label'>Total Consignments</div>
@@ -321,7 +324,10 @@ elif page == "📥 Data Ingestion":
 
 elif page == "📑 Consignment Ledger":
     st.markdown("# 📑 Global Consignment Ledger")
-    df = st.session_state["ledger_data"]
+    from ledger_db import load_ledger as _ll2
+    _company2 = profile.get("company","") if role != "admin" else ""
+    _ledger2  = _ll2(_company2)
+    df = pd.DataFrame(_ledger2) if _ledger2 else pd.DataFrame(columns=LEDGER_COLS)
     if not df.empty:
         col1, col2, col3 = st.columns(3)
         col1.metric("Total", len(df))
