@@ -49,47 +49,80 @@ def _render_intake(company: str, role: str):
 
     scanned_id = ""
     if scan_method == "📷 Camera Scan":
-        components.html("""
-        <div id="scanner-container" style="width:100%;max-width:400px;margin:0 auto;">
-            <video id="preview" style="width:100%;border-radius:12px;border:2px solid #1e3a5f;"></video>
-            <div id="result-box" style="margin-top:12px;padding:12px 16px;
-                background:#0d1224;border:1px solid #1e3a5f;border-radius:8px;
-                font-family:monospace;font-size:1rem;color:#38bdf8;min-height:40px;">
-                Waiting for QR scan...</div>
-            <button onclick="startCamera()" style="margin-top:10px;padding:10px 20px;
-                background:linear-gradient(135deg,#0369a1,#0284c7);color:white;
-                border:none;border-radius:8px;font-size:0.9rem;cursor:pointer;width:100%;">
-                ▶ Start Camera</button>
-            <button onclick="stopCamera()" style="margin-top:6px;padding:8px 20px;
-                background:#1e3a5f;color:#94a3b8;border:none;border-radius:8px;
-                font-size:0.85rem;cursor:pointer;width:100%;">■ Stop Camera</button>
+        st.markdown("""
+        <div style='background:#0d1224;border:1px solid #1e3a5f;border-radius:12px;
+                    padding:16px;text-align:center;margin-bottom:12px'>
+            <div style='color:#38bdf8;font-family:Space Mono,monospace;font-size:0.85rem;
+                        margin-bottom:8px'>📱 MOBILE QR SCAN</div>
+            <div style='color:#94a3b8;font-size:0.82rem;margin-bottom:12px'>
+                Tap the button below to open your camera and scan the farmer QR card.
+                The farmer ID will appear in the field below automatically.
+            </div>
         </div>
-        <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+        """, unsafe_allow_html=True)
+        components.html("""
+        <div style="text-align:center;padding:10px">
+            <input type="file" id="qr-input" accept="image/*" capture="environment"
+                style="display:none" onchange="decodeQR(this)"/>
+            <button onclick="document.getElementById('qr-input').click()"
+                style="background:linear-gradient(135deg,#0369a1,#0284c7);
+                       color:white;border:none;border-radius:10px;
+                       padding:14px 28px;font-size:1rem;cursor:pointer;
+                       width:100%;max-width:320px;font-weight:700;
+                       letter-spacing:0.05em">
+                📷 Open Camera to Scan QR
+            </button>
+            <div id="result-box" style="margin-top:14px;padding:12px 16px;
+                background:#0d1224;border:1px solid #1e3a5f;border-radius:8px;
+                font-family:monospace;font-size:0.95rem;color:#38bdf8;
+                min-height:38px;word-break:break-all;">
+                Tap button above to scan QR card
+            </div>
+        </div>
+        <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
         <script>
-        let codeReader = null;
-        function startCamera() {
-            codeReader = new ZXing.BrowserQRCodeReader();
-            codeReader.decodeFromVideoDevice(null, 'preview', (result, err) => {
-                if (result) {
-                    let text = result.getText();
-                    document.getElementById('result-box').innerText = '✅ Scanned: ' + text;
-                    try {
-                        let data = JSON.parse(text);
-                        let fid = data.id || text;
-                        window.parent.postMessage({type:'streamlit:setComponentValue',value:fid},'*');
-                    } catch(e) {
-                        window.parent.postMessage({type:'streamlit:setComponentValue',value:text},'*');
+        function decodeQR(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas  = document.createElement('canvas');
+                    canvas.width  = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const code = jsQR(imageData.data, imageData.width, imageData.height);
+                    if (code) {
+                        let text = code.data;
+                        document.getElementById('result-box').innerText = '✅ Scanned: ' + text;
+                        document.getElementById('result-box').style.borderColor = '#16a34a';
+                        try {
+                            let data = JSON.parse(text);
+                            let fid = data.id || text;
+                            window.parent.postMessage({
+                                type:'streamlit:setComponentValue', value: fid
+                            }, '*');
+                        } catch(e) {
+                            window.parent.postMessage({
+                                type:'streamlit:setComponentValue', value: text
+                            }, '*');
+                        }
+                    } else {
+                        document.getElementById('result-box').innerText =
+                            '❌ No QR found. Try again with better lighting.';
+                        document.getElementById('result-box').style.borderColor = '#dc2626';
                     }
-                }
-            });
-        }
-        function stopCamera() {
-            if (codeReader) { codeReader.reset(); codeReader = null; }
-            document.getElementById('result-box').innerText = 'Camera stopped.';
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
         }
         </script>
-        """, height=420)
-        scanned_id = st.text_input("Farmer ID from scan",
+        """, height=220)
+        scanned_id = st.text_input("Farmer ID (paste here after scan)",
                                     placeholder="VP-XXXXXXXX", key="camera_id").strip().upper()
     else:
         scanned_id = st.text_input("Farmer ID",
@@ -163,7 +196,19 @@ def _render_intake(company: str, role: str):
     st.caption("One row per crop. Multiple rows allowed per session.")
 
     if "intake_rows" not in st.session_state:
-        st.session_state.intake_rows = []
+        # Restore from disk if app was refreshed mid-session
+        _session_file = os.path.join("data", f"active_session_{company.replace(' ','_')}.json")
+        if os.path.exists(_session_file):
+            try:
+                with open(_session_file) as _f:
+                    _saved = json.load(_f)
+                st.session_state.intake_rows = _saved.get("rows", [])
+                if st.session_state.intake_rows:
+                    st.info(f"♻️ Restored {len(st.session_state.intake_rows)} unsaved row(s) from your last session.")
+            except:
+                st.session_state.intake_rows = []
+        else:
+            st.session_state.intake_rows = []
 
     col1, col2, col3 = st.columns([2,1,1])
     with col1:
@@ -200,6 +245,11 @@ def _render_intake(company: str, role: str):
                 "notes":     notes,
                 "eudr_risk": EUDR_RISK.get(crop,"GREEN"),
             })
+            # Persist to disk so refresh doesn't lose data
+            _session_file = os.path.join("data", f"active_session_{company.replace(' ','_')}.json")
+            os.makedirs("data", exist_ok=True)
+            with open(_session_file,"w") as _f:
+                json.dump({"rows": st.session_state.intake_rows}, _f)
             st.rerun()
 
     if st.session_state.intake_rows:
@@ -266,6 +316,10 @@ def _render_intake(company: str, role: str):
                 st.success(f"✅ {len(st.session_state.intake_rows)} rows saved — **{session_id}**")
                 st.balloons()
                 st.session_state.intake_rows = []
+                # Clear disk session after successful save
+                _session_file = os.path.join("data", f"active_session_{company.replace(' ','_')}.json")
+                if os.path.exists(_session_file):
+                    os.remove(_session_file)
                 st.rerun()
     else:
         st.info("No rows yet. Select a crop and click ➕ Add Product Row.")
@@ -333,23 +387,43 @@ def _render_record_keeper_edit(company: str):
                 key=f"edit_ph_{idx}"
             )
 
-            if st.button("💾 Save Edit", key=f"save_edit_{idx}"):
-                if os.path.exists(ledger_path):
-                    with open(ledger_path) as f:
-                        all_records = json.load(f)
-                    company_lower = company.strip().lower()
-                    session_id    = record.get("session_id")
-                    row_crop      = record.get("crop")
-                    for r in all_records:
-                        if (r.get("session_id") == session_id
-                                and r.get("crop") == row_crop
-                                and r.get("company","").strip().lower() == company_lower):
-                            r["weight_kg"]  = new_weight
-                            r["grade"]      = new_grade
-                            r["notes"]      = new_notes
-                            r["packhouse"]  = new_packhouse
-                            r["last_edited"] = dt.datetime.now().isoformat()
-                            break
-                    save_full_ledger(all_records)
-                    st.success("✅ Record updated.")
-                    st.rerun()
+            col_save, col_del = st.columns([3,1])
+            with col_save:
+                if st.button("💾 Save Edit", key=f"save_edit_{idx}"):
+                    if os.path.exists(ledger_path):
+                        with open(ledger_path) as f:
+                            all_records = json.load(f)
+                        company_lower = company.strip().lower()
+                        session_id    = record.get("session_id")
+                        row_crop      = record.get("crop")
+                        for r in all_records:
+                            if (r.get("session_id") == session_id
+                                    and r.get("crop") == row_crop
+                                    and r.get("company","").strip().lower() == company_lower):
+                                r["weight_kg"]   = new_weight
+                                r["grade"]       = new_grade
+                                r["notes"]       = new_notes
+                                r["packhouse"]   = new_packhouse
+                                r["last_edited"] = dt.datetime.now().isoformat()
+                                break
+                        save_full_ledger(all_records)
+                        st.success("✅ Record updated.")
+                        st.rerun()
+            with col_del:
+                if st.button("🗑 Delete", key=f"del_record_{idx}",
+                             type="secondary", use_container_width=True):
+                    if os.path.exists(ledger_path):
+                        with open(ledger_path) as f:
+                            all_records = json.load(f)
+                        company_lower = company.strip().lower()
+                        session_id    = record.get("session_id")
+                        row_crop      = record.get("crop")
+                        all_records   = [
+                            r for r in all_records
+                            if not (r.get("session_id") == session_id
+                                    and r.get("crop") == row_crop
+                                    and r.get("company","").strip().lower() == company_lower)
+                        ]
+                        save_full_ledger(all_records)
+                        st.success("🗑 Record deleted.")
+                        st.rerun()
