@@ -293,15 +293,15 @@ if page == "📊 Dashboard":
         st.markdown(f"""<div class='metric-card'><div class='metric-label'>Total Consignments</div>
             <div class='metric-value'>{len(df)}</div></div>""", unsafe_allow_html=True)
     with col2:
-        tw = df["Net_Weight_KG"].astype(float).sum() if not df.empty else 0
+        tw = df["weight_kg"].astype(float).sum() if not df.empty and "weight_kg" in df.columns else 0
         st.markdown(f"""<div class='metric-card'><div class='metric-label'>Total Weight (KG)</div>
             <div class='metric-value'>{tw:,.0f}</div></div>""", unsafe_allow_html=True)
     with col3:
-        tf = df["FOB_Value_USD"].astype(float).sum() if not df.empty else 0
+        tf = df["FOB_Value_USD"].astype(float).sum() if not df.empty and "FOB_Value_USD" in df.columns else 0
         st.markdown(f"""<div class='metric-card'><div class='metric-label'>Total FOB Value</div>
             <div class='metric-value'>${tf:,.2f}</div></div>""", unsafe_allow_html=True)
     with col4:
-        vp = df[df["PIN_Valid"]=="✅ Valid"].shape[0] if not df.empty else 0
+        vp = df[df["PIN_Valid"]=="✅ Valid"].shape[0] if not df.empty and "PIN_Valid" in df.columns else 0
         st.markdown(f"""<div class='metric-card'><div class='metric-label'>Verified PINs</div>
             <div class='metric-value'>{vp}</div></div>""", unsafe_allow_html=True)
     if not df.empty:
@@ -309,16 +309,20 @@ if page == "📊 Dashboard":
         col_a, col_b = st.columns(2)
         with col_a:
             st.markdown("<div class='section-header'>CONSIGNMENTS BY CROP</div>", unsafe_allow_html=True)
-            cc = df["Crop_Type"].value_counts().reset_index()
-            cc.columns = ["Crop","Count"]
-            st.bar_chart(cc.set_index("Crop"))
+            crop_col = "crop" if "crop" in df.columns else "Crop_Type" if "Crop_Type" in df.columns else None
+            if crop_col:
+                cc = df[crop_col].value_counts().reset_index()
+                cc.columns = ["Crop","Count"]
+                st.bar_chart(cc.set_index("Crop"))
         with col_b:
-            st.markdown("<div class='section-header'>FOB VALUE BY COUNTY</div>", unsafe_allow_html=True)
-            cf = df.groupby("Origin_County")["FOB_Value_USD"].sum().reset_index()
-            cf.columns = ["County","FOB_USD"]
-            st.bar_chart(cf.set_index("County"))
+            st.markdown("<div class='section-header'>WEIGHT BY COUNTY</div>", unsafe_allow_html=True)
+            county_col = "county" if "county" in df.columns else "Origin_County" if "Origin_County" in df.columns else None
+            if county_col and "weight_kg" in df.columns:
+                cf = df.groupby(county_col)["weight_kg"].sum().reset_index()
+                cf.columns = ["County","Weight_KG"]
+                st.bar_chart(cf.set_index("County"))
     else:
-        st.info("No data yet. Use Data Ingestion or Packhouse Intake to add records.")
+        st.info("No data yet. Use Packhouse Intake to add records.")
 
 elif page == "📥 Data Ingestion":
     render_data_ingestion_page(save_callback=save_to_ledger)
