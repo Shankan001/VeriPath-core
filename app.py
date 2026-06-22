@@ -98,6 +98,7 @@ KRA_PIN_PATTERN = re.compile(r'^[A-Z]\d{9}[A-Z]$')
 # ── Role → Pages ───────────────────────────────────────────────────────────
 ROLE_PAGES = {
     "record_keeper": [
+        "🌿 Outgrower Registry",
         "📦 Packhouse Intake",
     ],
     "agronomist": [
