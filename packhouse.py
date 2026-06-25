@@ -407,11 +407,11 @@ def _render_record_keeper_edit(company: str):
                                 r["last_edited"] = dt.datetime.now().isoformat()
                                 break
                         from supabase_db import update_ledger_record_db
-                    update_ledger_record_db(
-                        session_id, row_crop, company_lower,
-                        {"weight_kg": new_weight, "grade": new_grade,
-                         "notes": new_notes, "packhouse": new_packhouse}
-                    )
+                        update_ledger_record_db(
+                            session_id, row_crop, company_lower,
+                            {"weight_kg": new_weight, "grade": new_grade,
+                             "notes": new_notes, "packhouse": new_packhouse}
+                        )
                         st.success("✅ Record updated.")
                         st.rerun()
             with col_del:
