@@ -287,8 +287,9 @@ def _render_intake(company: str, role: str):
                 if os.path.exists(ledger_path):
                     with open(ledger_path) as f:
                         all_records = json.load(f)
+                from supabase_db import save_ledger_record_db
                 for row in st.session_state.intake_rows:
-                    all_records.append({
+                    save_ledger_record_db({
                         "session_id":   session_id,
                         "batch_ref":    batch_ref or session_id,
                         "intake_date":  intake_date.isoformat(),
@@ -312,7 +313,6 @@ def _render_intake(company: str, role: str):
                         "audit_status": "unreviewed",
                         "company":      company,
                     })
-                save_full_ledger(all_records)
                 st.success(f"✅ {len(st.session_state.intake_rows)} rows saved — **{session_id}**")
                 st.balloons()
                 st.session_state.intake_rows = []
@@ -406,7 +406,12 @@ def _render_record_keeper_edit(company: str):
                                 r["packhouse"]   = new_packhouse
                                 r["last_edited"] = dt.datetime.now().isoformat()
                                 break
-                        save_full_ledger(all_records)
+                        from supabase_db import update_ledger_record_db
+                    update_ledger_record_db(
+                        session_id, row_crop, company_lower,
+                        {"weight_kg": new_weight, "grade": new_grade,
+                         "notes": new_notes, "packhouse": new_packhouse}
+                    )
                         st.success("✅ Record updated.")
                         st.rerun()
             with col_del:
@@ -418,12 +423,7 @@ def _render_record_keeper_edit(company: str):
                         company_lower = company.strip().lower()
                         session_id    = record.get("session_id")
                         row_crop      = record.get("crop")
-                        all_records   = [
-                            r for r in all_records
-                            if not (r.get("session_id") == session_id
-                                    and r.get("crop") == row_crop
-                                    and r.get("company","").strip().lower() == company_lower)
-                        ]
-                        save_full_ledger(all_records)
+                        from supabase_db import delete_ledger_record_db
+                        delete_ledger_record_db(session_id, row_crop, company)
                         st.success("🗑 Record deleted.")
                         st.rerun()

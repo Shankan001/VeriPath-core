@@ -8,3 +8,4 @@ Pillow
 reportlab
 playwright
 fpdf2
+supabase

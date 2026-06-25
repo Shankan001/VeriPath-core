@@ -15,23 +15,21 @@ TIER_PRICES_KES = {
     "trial":              0,
 }
 
-def _load(path):
-    if not os.path.exists(path):
-        return {}
-    try:
-        with open(path) as f:
-            return json.load(f)
-    except:
-        return {}
+def _load_kpi_overrides_local():
+    from supabase_db import load_kpi_overrides
+    return load_kpi_overrides()
 
 def _save_kpi_overrides(data):
-    os.makedirs(DATA_DIR, exist_ok=True)
-    with open(KPI_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+    from supabase_db import save_kpi_overrides
+    save_kpi_overrides(
+        data.get("cac_kes", 5000),
+        data.get("churn_rate_pct", 0.0)
+    )
 
 def compute_kpis() -> dict:
-    companies = _load(COMPANIES_FILE)
-    overrides = _load(KPI_FILE)
+    from supabase_db import load_companies, load_users
+    companies = load_companies()
+    overrides = _load_kpi_overrides_local()
     now       = datetime.now(timezone.utc)
 
     paying = [c for c in companies.values()
@@ -66,7 +64,8 @@ def compute_kpis() -> dict:
         tier_breakdown[t] = tier_breakdown.get(t, 0) + 1
 
     # ── User count ────────────────────────────────────────────
-    users = _load(USERS_FILE)
+    from supabase_db import load_users
+    users = load_users()
 
     return {
         "mrr":             mrr,
@@ -97,7 +96,7 @@ def render_kpi_dashboard(profile: dict):
                 unsafe_allow_html=True)
 
     kpis = compute_kpis()
-    overrides = _load(KPI_FILE)
+    overrides = _load_kpi_overrides_local()
 
     st.markdown("---")
     st.markdown("<div style='font-family:Space Mono,monospace;font-size:0.75rem;"

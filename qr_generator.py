@@ -105,13 +105,8 @@ def render_qr_page(profile: dict = None):
                     "registered_at": datetime.now().isoformat(),
                     "status":        "Active",
                 }
-                all_farmers = load_farmers()
-                all_farmers[farmer_id] = farmer_data
-                from ledger_db import save_farmers as _sf
-                import os, json
-                os.makedirs("data", exist_ok=True)
-                with open(os.path.join("data","farmers.json"),"w") as f:
-                    json.dump(all_farmers, f, indent=2)
+                from supabase_db import save_farmer_db
+                save_farmer_db(farmer_id, farmer_data)
 
                 st.success(f"✅ Registered! ID: **{farmer_id}**")
                 qr_buf = generate_qr(farmer_id, farmer_data)
