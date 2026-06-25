@@ -100,12 +100,14 @@ ROLE_PAGES = {
     "record_keeper": [
         "🌿 Outgrower Registry",
         "📦 Packhouse Intake",
+        "📥 Data Ingestion",
     ],
     "agronomist": [
         "🌿 Outgrower Registry",
         "📦 Packhouse Intake",
     ],
     "compliance_officer": [
+        "📥 Data Ingestion",
         "📅 Daily Batch Reports",
         "🔍 Pre-Audit Gate",
         "🌍 EUDR Risk Scorer",
@@ -438,7 +440,9 @@ elif page == "📡 Transmit to Portals":
 
 elif page == "🌱 Carbon Tracking":
     st.markdown("# 🌱 Sustainability & Carbon Metrics")
-    df = st.session_state["ledger_data"]
+    from supabase_db import load_ledger_db as _load_ledger_db
+    _company = profile.get("company", "")
+    df = pd.DataFrame(_load_ledger_db(_company))
     tw = df["weight_kg"].astype(float).sum() if not df.empty and "weight_kg" in df.columns else (df["Net_Weight_KG"].astype(float).sum() if not df.empty and "Net_Weight_KG" in df.columns else 0)
     col1, col2, col3 = st.columns(3)
     col1.metric("Estimated Carbon Footprint", f"{round(tw*0.0021,3)} MT CO₂")
@@ -507,26 +511,22 @@ elif page == "👥 My Team":
             </a>""", unsafe_allow_html=True)
     st.markdown("---")
     st.markdown("### Your Team Members")
-    import json as _json
-    users_path = "data/users.json"
-    if os.path.exists(users_path):
-        with open(users_path) as f:
-            all_users = _json.load(f)
-        company_lower = profile.get("company","").strip().lower()
-        team = [u for u in all_users.values()
-                if u.get("company","").strip().lower() == company_lower
-                and u.get("role") in ("record_keeper","compliance_officer")]
-        if team:
-            import pandas as pd
-            team_df = pd.DataFrame([{
-                "Name":     u["full_name"],
-                "Role":     u["role"].replace("_"," ").title(),
-                "Username": u["username"],
-                "Joined":   u.get("created_at","")[:10],
-            } for u in team])
-            st.dataframe(team_df, use_container_width=True, hide_index=True)
-        else:
-            st.info("No team members yet. Generate a code above and share it.")
+    from supabase_db import load_users
+    all_users = load_users()
+    company_lower = profile.get("company","").strip().lower()
+    team = [u for u in all_users.values()
+            if u.get("company","").strip().lower() == company_lower
+            and u.get("role") in ("record_keeper","compliance_officer")]
+    if team:
+        team_df = pd.DataFrame([{
+            "Name":     u["full_name"],
+            "Role":     u["role"].replace("_"," ").title(),
+            "Username": u["username"],
+            "Joined":   u.get("created_at","")[:10],
+        } for u in team])
+        st.dataframe(team_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No team members yet. Generate a code above and share it.")
 
 elif page == "🗑 Demo Reset":
     st.markdown("# 🗑 Demo Reset")
@@ -564,7 +564,9 @@ elif page == "🗑 Demo Reset":
 
 elif page == "🗺 Origin Map":
     st.markdown("# 🗺 Produce Origin Map")
-    df = st.session_state["ledger_data"]
+    from supabase_db import load_ledger_db as _load_ledger_db
+    _company = profile.get("company", "")
+    df = pd.DataFrame(_load_ledger_db(_company))
     if not df.empty:
         import random
         map_data = []

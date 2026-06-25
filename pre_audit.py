@@ -82,6 +82,8 @@ def render_pre_audit_page(profile: dict):
     if st.button("🔍 Run Pre-Audit Check", use_container_width=True, type="primary"):
         result = run_audit(batch_df.to_dict("records"))
         st.session_state["audit_result"] = result
+        # Clear any previous submission flag when re-running audit
+        st.session_state.pop("submission_flagged", None)
 
     if "audit_result" not in st.session_state:
         return
@@ -143,28 +145,89 @@ def render_pre_audit_page(profile: dict):
 
     st.markdown("---")
 
-    if result["all_clean"]:
-        st.markdown("""
-        <div style='background:#071a0f;border:2px solid #16a34a;border-radius:12px;
-                    padding:18px;text-align:center'>
-            <div style='font-size:1.2rem;font-weight:700;color:#4ade80'>
-                ✅ ALL CLEAN — READY FOR SUBMISSION</div>
-        </div>""", unsafe_allow_html=True)
-        if role in ("admin","exporter"):
+    # ── COMPLIANCE OFFICER: Flag for Submission ────────────────────────────
+    if role == "compliance_officer":
+        if result["all_clean"]:
+            st.markdown("""
+            <div style='background:#071a0f;border:2px solid #16a34a;border-radius:12px;
+                        padding:18px;text-align:center;margin-bottom:16px'>
+                <div style='font-size:1.1rem;font-weight:700;color:#4ade80'>
+                    ✅ ALL CLEAN — Ready to flag for exporter approval</div>
+            </div>""", unsafe_allow_html=True)
+
+        flag_note = st.text_area(
+            "Note to Exporter (required)",
+            placeholder="e.g. Batch of 2025-06-25 has passed pre-audit. 42 clean records ready for KenTrade submission.",
+            key="co_flag_note"
+        )
+        if st.button("🚩 Flag for Submission", use_container_width=True, type="primary"):
+            if not flag_note.strip():
+                st.error("Please add a note to the exporter before flagging.")
+            else:
+                st.session_state["submission_flagged"] = {
+                    "flagged_by":   profile.get("full_name", role),
+                    "flagged_at":   datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "note":         flag_note.strip(),
+                    "audit_date":   audit_date,
+                    "packhouse":    audit_ph,
+                    "total":        result["total"],
+                    "passed":       result["passed"],
+                    "clean_records": result["clean_records"],
+                }
+                st.success(f"✅ Batch flagged for exporter review. Awaiting approval.")
+
+    # ── EXPORTER / ADMIN: See flag notification + Approve ──────────────────
+    elif role in ("admin", "exporter"):
+        if st.session_state.get("submission_flagged"):
+            flag = st.session_state["submission_flagged"]
+            st.markdown(f"""
+            <div style='background:#0f1a2e;border:2px solid #38bdf8;border-radius:12px;
+                        padding:18px 22px;margin-bottom:16px'>
+                <div style='font-size:1rem;font-weight:700;color:#38bdf8'>
+                    📬 Submission Request from Compliance Officer</div>
+                <div style='color:#94a3b8;font-size:0.85rem;margin-top:6px'>
+                    Flagged by <b style='color:#e8eaf0'>{flag["flagged_by"]}</b>
+                    · {flag["flagged_at"]}
+                </div>
+                <div style='color:#e8eaf0;margin-top:10px;font-size:0.9rem'>
+                    📋 <b>Batch:</b> {flag["audit_date"]} — {flag["packhouse"]}<br>
+                    ✅ <b>{flag["passed"]} clean records</b> of {flag["total"]} total<br>
+                    💬 <i>"{flag["note"]}"</i>
+                </div>
+            </div>""", unsafe_allow_html=True)
+
+            col_a, col_r = st.columns(2)
+            with col_a:
+                if st.button("✅ Approve & Push to Portals", use_container_width=True, type="primary"):
+                    st.session_state["batch_approved"]   = True
+                    st.session_state["approved_records"] = flag["clean_records"]
+                    st.session_state.pop("submission_flagged", None)
+                    st.success("✅ Approved. Go to Transmit to Portals.")
+            with col_r:
+                if st.button("❌ Reject & Return", use_container_width=True):
+                    st.session_state.pop("submission_flagged", None)
+                    st.warning("Submission request rejected. Compliance officer will be notified on next login.")
+
+        elif result["all_clean"]:
+            st.markdown("""
+            <div style='background:#071a0f;border:2px solid #16a34a;border-radius:12px;
+                        padding:18px;text-align:center'>
+                <div style='font-size:1.2rem;font-weight:700;color:#4ade80'>
+                    ✅ ALL CLEAN — READY FOR SUBMISSION</div>
+            </div>""", unsafe_allow_html=True)
             if st.button("🚀 Approve & Push to Portals",
                          use_container_width=True, type="primary"):
                 st.session_state["batch_approved"]   = True
                 st.session_state["approved_records"] = result["clean_records"]
                 st.success("✅ Approved. Go to Transmit to Portals.")
-    else:
-        total_flags = len(result["eudr_flags"]) + len(result["missing_flags"])
-        st.markdown(f"""
-        <div style='background:#1a0a0a;border:2px solid #dc2626;border-radius:12px;
-                    padding:18px;text-align:center'>
-            <div style='font-size:1.2rem;font-weight:700;color:#f87171'>
-                🔴 {total_flags} ISSUE(S) — SUBMISSION BLOCKED</div>
-        </div>""", unsafe_allow_html=True)
-        if role in ("admin","exporter"):
+        else:
+            total_flags = len(result["eudr_flags"]) + len(result["missing_flags"])
+            st.markdown(f"""
+            <div style='background:#1a0a0a;border:2px solid #dc2626;border-radius:12px;
+                        padding:18px;text-align:center'>
+                <div style='font-size:1.2rem;font-weight:700;color:#f87171'>
+                    🔴 {total_flags} ISSUE(S) — SUBMISSION BLOCKED</div>
+            </div>""", unsafe_allow_html=True)
             override_reason = st.text_area("Override reason *")
             if st.button("⚠ Override & Approve Anyway", use_container_width=True):
                 if not override_reason.strip():

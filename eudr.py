@@ -1,10 +1,8 @@
 import streamlit as st
-import json
 import os
 import pandas as pd
 from datetime import datetime
-
-LEDGER_DB = "ledger.json"
+from supabase_db import load_ledger_db
 
 # ── Constants ──────────────────────────────────────────────────────────────
 EUDR_REGULATED_CROPS = ["Coffee", "Tea", "Maize", "Soy", "Palm Oil", "Cattle", "Cocoa", "Wood"]
@@ -119,17 +117,13 @@ def score_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 # ── Page renderer ──────────────────────────────────────────────────────────
-def load_ledger():
-    if os.path.exists(LEDGER_DB):
-        with open(LEDGER_DB, "r") as f:
-            return json.load(f)
-    return []
+def render_eudr_page(profile: dict = None):
+    company = profile.get("company", "") if profile else ""
 
-def render_eudr_page():
     st.markdown("# 🌍 EUDR Risk Scorer")
     st.markdown("<p style='color:#64748b'>EU Deforestation Regulation 2023/1115 — per-consignment compliance risk assessment</p>", unsafe_allow_html=True)
 
-    ledger = load_ledger()
+    ledger = load_ledger_db(company) if company else []
     tab1, tab2 = st.tabs(["🔍 Score a Consignment", "📊 Ledger Risk Overview"])
 
     with tab1:
@@ -158,8 +152,8 @@ def render_eudr_page():
             st.markdown(f"""
             <div style='background:{bg};border:2px solid {border};border-radius:12px;padding:18px 22px;margin:14px 0'>
                 <div style='font-size:1.4rem;font-weight:700;font-family:Space Mono,monospace;color:{color}'>{icon} {risk} — {result["risk_level"].upper()} RISK</div>
-                <div style='color:#94a3b8;font-size:0.88rem;margin-top:8px'>{EUDR_RULES[crop]["reason"]}</div>
-                <div style='color:#e8eaf0;font-size:0.9rem;margin-top:10px'>⚡ <b>Required action:</b> {EUDR_RULES[crop]["action"]}</div>
+                <div style='color:#94a3b8;font-size:0.88rem;margin-top:8px'>{EUDR_RULES.get(crop, {}).get("reason", "")}</div>
+                <div style='color:#e8eaf0;font-size:0.9rem;margin-top:10px'>⚡ <b>Required action:</b> {EUDR_RULES.get(crop, {}).get("action", "")}</div>
                 <div style='color:#64748b;font-size:0.8rem;margin-top:8px'>EUDR Score: {result["score"]} / 3</div>
             </div>
             """, unsafe_allow_html=True)
