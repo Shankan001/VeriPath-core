@@ -489,56 +489,8 @@ elif page == "🔑 Invite Codes":
         st.info("No codes generated yet.")
 
 elif page == "👥 My Team":
-    st.markdown("# 👥 My Team")
-    st.markdown("<p style='color:#64748b'>Generate invite codes for your record keepers and compliance officers</p>", unsafe_allow_html=True)
-    if profile.get("role") not in ("exporter","admin","agronomist","record_keeper"):
-        st.error("🔒 Access restricted.")
-        st.stop()
-    st.markdown("---")
-    st.markdown("### Add Team Member")
-    allowed_roles = ["record_keeper","compliance_officer"]
-    col_r, col_g = st.columns([2,1])
-    with col_r:
-        team_role = st.selectbox("Role", allowed_roles,
-                                  format_func=lambda x: "Record Keeper" if x=="record_keeper" else "Compliance Officer")
-    with col_g:
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("⚡ Generate Invite Code", use_container_width=True, type="primary"):
-            code = generate_invite_code(team_role, created_by=profile["username"])
-            st.success("✅ Share this code with your team member:")
-            st.code(code, language=None)
-            wa_msg  = f"Hello,+here+is+your+VeriPath+invite+code:+{code}+%0ARegister+at:+your-app-url"
-            wa_link = f"https://wa.me/?text={wa_msg}"
-            st.markdown(f"""
-            <a href="{wa_link}" target="_blank"
-               style='background:#16a34a;color:white;padding:10px 24px;border-radius:8px;
-                      font-family:Space Mono,monospace;font-size:0.85rem;font-weight:700;
-                      text-decoration:none;display:inline-block;margin-top:8px'>
-                📱 Send via WhatsApp
-            </a>""", unsafe_allow_html=True)
-    st.markdown("---")
-    st.markdown("### Your Team Members")
-    from supabase_db import load_users
-    all_users = load_users()
-    company_lower = profile.get("company","").strip().lower()
-    team = [u for u in all_users.values()
-            if u.get("company","").strip().lower() == company_lower
-            and u.get("role") in ("record_keeper","compliance_officer")]
-    if team:
-        team_df = pd.DataFrame([{
-            "Name":     u["full_name"],
-            "Role":     u["role"].replace("_"," ").title(),
-            "Username": u["username"],
-            "Joined":   u.get("created_at","")[:10],
-        } for u in team])
-        st.dataframe(team_df, use_container_width=True, hide_index=True)
-    else:
-        st.info("No team members yet. Generate a code above and share it.")
-
-elif page in ("📸 Farm Activities", "📦 My Batches",
-                  "💰 Payments", "🌿 My Farm Profile"):
-    from farmer_dashboard import render_farmer_dashboard
-    render_farmer_dashboard(profile)
+    from my_team import render_my_team
+    render_my_team(profile)
 
 elif page == "🗑 Demo Reset":
     st.markdown("# 🗑 Demo Reset")
