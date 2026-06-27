@@ -22,5 +22,13 @@
     "tier_set_at": null,
     "tier_expires_at": null,
     "containers_used": 0
+  },
+  "vegpro": {
+    "company_name": "vegpro",
+    "subscription_tier": "trial",
+    "trial_started_at": "2026-06-20T22:24:46.976939",
+    "tier_set_at": null,
+    "tier_expires_at": null,
+    "containers_used": 0
   }
 }

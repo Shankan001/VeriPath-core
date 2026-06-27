@@ -20,7 +20,7 @@
     "password": "79fe000ec211bf0c1d1019e9f65359cf2d5dbd22e5f21c59e87982aa32129970",
     "salt": "73760561f0723bc38fe35549a3f09f0cfd85b01a96f5ef7682aaecd9dc4c8239",
     "created_at": "2026-06-09T10:27:47.682005",
-    "last_login": "2026-06-16T22:06:58.919132",
+    "last_login": "2026-06-20T22:23:41.928569",
     "subscription_tier": "Green Channel",
     "containers_used": 0,
     "invite_code_used": "LEGACY",
@@ -51,5 +51,18 @@
     "subscription_tier": "trial",
     "containers_used": 0,
     "invite_code_used": "LEGACY"
+  },
+  "george": {
+    "username": "george",
+    "full_name": "George bush",
+    "company": "vegpro",
+    "role": "exporter",
+    "password": "16135b3ae7883885c5d2b5f464aef48857adff9600819de935ee0408ef70d14d",
+    "salt": "815cd096362dc0bf08f06beb368ca57cd3a98ffd107fb3c50f9c1082a82466a3",
+    "created_at": "2026-06-20T22:24:46.976939",
+    "last_login": "2026-06-20T22:25:01.761736",
+    "invite_code_used": "VP-EXP-CCLU",
+    "subscription_tier": "trial",
+    "containers_used": 0
   }
 }

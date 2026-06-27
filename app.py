@@ -101,6 +101,7 @@ ROLE_PAGES = {
         "🌿 Outgrower Registry",
         "📦 Packhouse Intake",
         "📥 Data Ingestion",
+        "👥 My Team",
     ],
     "agronomist": [
         "🌿 Outgrower Registry",
@@ -484,8 +485,8 @@ elif page == "🔑 Invite Codes":
 elif page == "👥 My Team":
     st.markdown("# 👥 My Team")
     st.markdown("<p style='color:#64748b'>Generate invite codes for your record keepers and compliance officers</p>", unsafe_allow_html=True)
-    if profile.get("role") not in ("exporter","admin"):
-        st.error("🔒 Exporter or Admin only.")
+    if profile.get("role") not in ("exporter","admin","agronomist","record_keeper"):
+        st.error("🔒 Access restricted.")
         st.stop()
     st.markdown("---")
     st.markdown("### Add Team Member")
@@ -532,8 +533,8 @@ elif page == "🗑 Demo Reset":
     st.markdown("# 🗑 Demo Reset")
     st.markdown("<p style='color:#64748b'>Wipe your company data for a clean demo</p>",
                 unsafe_allow_html=True)
-    if profile.get("role") not in ("exporter","admin"):
-        st.error("🔒 Exporter or Admin only.")
+    if profile.get("role") not in ("exporter","admin","agronomist","record_keeper"):
+        st.error("🔒 Access restricted.")
         st.stop()
     company = profile.get("company","")
     st.markdown("---")
