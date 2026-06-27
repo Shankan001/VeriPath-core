@@ -97,6 +97,12 @@ KRA_PIN_PATTERN = re.compile(r'^[A-Z]\d{9}[A-Z]$')
 
 # ── Role → Pages ───────────────────────────────────────────────────────────
 ROLE_PAGES = {
+    "farmer": [
+        "📸 Farm Activities",
+        "📦 My Batches",
+        "💰 Payments",
+        "🌿 My Farm Profile",
+    ],
     "record_keeper": [
         "🌿 Outgrower Registry",
         "📦 Packhouse Intake",
@@ -528,6 +534,11 @@ elif page == "👥 My Team":
         st.dataframe(team_df, use_container_width=True, hide_index=True)
     else:
         st.info("No team members yet. Generate a code above and share it.")
+
+elif page in ("📸 Farm Activities", "📦 My Batches",
+                  "💰 Payments", "🌿 My Farm Profile"):
+    from farmer_dashboard import render_farmer_dashboard
+    render_farmer_dashboard(profile)
 
 elif page == "🗑 Demo Reset":
     st.markdown("# 🗑 Demo Reset")
