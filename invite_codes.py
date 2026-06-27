@@ -11,6 +11,8 @@ ROLE_PREFIXES = {
     "compliance_officer": "VP-COM",
     "record_keeper":      "VP-REC",
     "admin":              "VP-ADM",
+    "agronomist":         "VP-AGR",
+    "farmer":             "VP-FAR",
 }
 
 VALID_ROLES = list(ROLE_PREFIXES.keys())
@@ -18,7 +20,7 @@ VALID_ROLES = list(ROLE_PREFIXES.keys())
 def generate_invite_code(role: str, created_by: str = "admin") -> str:
     if role not in ROLE_PREFIXES:
         raise ValueError(f"Invalid role: {role}")
-    prefix = ROLE_PREFIXES[role]
+    prefix   = ROLE_PREFIXES[role]
     existing = load_invite_codes()
     for _ in range(20):
         suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
@@ -29,7 +31,7 @@ def generate_invite_code(role: str, created_by: str = "admin") -> str:
     return code
 
 def validate_invite_code(code: str) -> tuple[bool, str, str | None]:
-    code = code.strip().upper()
+    code  = code.strip().upper()
     parts = code.split("-")
     if len(parts) != 3 or parts[0] != "VP" or len(parts[2]) != 4:
         return False, "Invalid code format. Expected VP-XXX-XXXX.", None
@@ -48,7 +50,7 @@ def consume_invite_code(code: str, username: str) -> bool:
     return consume_invite_code_db(code.strip().upper(), username)
 
 def list_invite_codes() -> list[dict]:
-    codes = load_invite_codes()
+    codes  = load_invite_codes()
     result = []
     for code, meta in codes.items():
         result.append({
@@ -67,7 +69,7 @@ def get_role_from_code(code: str) -> str | None:
     return role if valid else None
 
 def seed_admin_code() -> str | None:
-    codes = load_invite_codes()
+    codes    = load_invite_codes()
     existing = [c for c, m in codes.items()
                 if m.get("role") == "admin" and not m.get("used")]
     if existing:
