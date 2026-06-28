@@ -380,7 +380,7 @@ st.sidebar.markdown(
     unsafe_allow_html=True
 )
 st.sidebar.markdown("---")
-render_container_tracker(profile["username"])
+render_container_tracker(profile["username"], module="livestock" if "Livestock" in module else "crops")
 
 if st.sidebar.button("🚪 Sign Out", use_container_width=True):
     for k in ["authenticated","user_profile","auth_page","audit_result",
@@ -399,7 +399,7 @@ def save_to_ledger(new_entries):
     save_consignments(merged.to_dict("records"))
 
 # ── Trial banner ───────────────────────────────────────────────────────────
-render_trial_banner(profile["username"], role=profile.get("role","exporter"))
+render_trial_banner(profile["username"], role=profile.get("role","exporter"), module="livestock" if "Livestock" in module else "crops")
 
 # ══════════════════════════════════════════════════════════════════════════
 # PAGE ROUTING

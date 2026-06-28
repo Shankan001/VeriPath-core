@@ -10,44 +10,117 @@ WHATSAPP_NUMBER = "254796130512"
 TRIAL_DAYS      = 14
 
 PRICING_TIERS = {
-    "Starter": {
-        "price_kes":     2_500,
-        "container_cap": 5,
-        "desc":          "Up to 5 consignments/month",
-        "color":         "#334155",
+    "crops": {
+        "Starter": {
+            "price_kes":     0,
+            "container_cap": 5,
+            "desc":          "Up to 5 consignments/month",
+            "color":         "#334155",
+        },
+        "Growth": {
+            "price_kes":     0,
+            "container_cap": 10,
+            "desc":          "Up to 10 consignments/month",
+            "color":         "#0369a1",
+        },
+        "Enterprise": {
+            "price_kes":     0,
+            "container_cap": 50,
+            "desc":          "Up to 50 consignments/month",
+            "color":         "#7c3aed",
+        },
+        "Green Channel": {
+            "price_kes":     0,
+            "container_cap": 9_999,
+            "desc":          "Unlimited + IoT + Priority Port Lane",
+            "color":         "#16a34a",
+        },
     },
-    "Growth": {
-        "price_kes":     20_000,
-        "container_cap": 10,
-        "desc":          "Up to 10 consignments/month",
-        "color":         "#0369a1",
-    },
-    "Enterprise": {
-        "price_kes":     65_000,
-        "container_cap": 50,
-        "desc":          "Up to 50 consignments/month",
-        "color":         "#7c3aed",
-    },
-    "Green Channel": {
-        "price_kes":     150_000,
-        "container_cap": 9_999,
-        "desc":          "Unlimited + IoT + Priority Port Lane",
-        "color":         "#16a34a",
+    "livestock": {
+        "Smallholder": {
+            "price_kes":     0,
+            "container_cap": 10,
+            "desc":          "Up to 10 animals",
+            "color":         "#334155",
+        },
+        "Herd": {
+            "price_kes":     0,
+            "container_cap": 50,
+            "desc":          "Up to 50 animals",
+            "color":         "#0369a1",
+        },
+        "Ranch": {
+            "price_kes":     0,
+            "container_cap": 200,
+            "desc":          "Up to 200 animals",
+            "color":         "#7c3aed",
+        },
+        "Enterprise": {
+            "price_kes":     0,
+            "container_cap": 9_999,
+            "desc":          "Unlimited animals + full IoT",
+            "color":         "#16a34a",
+        },
     },
 }
 
-def get_trial_status(username: str) -> dict:
+# Flat merged dict for backward compatibility
+_ALL_TIERS = {**PRICING_TIERS["crops"], **PRICING_TIERS["livestock"]}
+
+def _get_module(username: str) -> str:
+    """Detect module from user profile."""
+    try:
+        from supabase_db import get_user
+        user = get_user(username)
+        if not user:
+            return "crops"
+        module = user.get("module","🌿 VeriPath Crops")
+        return "livestock" if "Livestock" in module else "crops"
+    except Exception:
+        return "crops"
+
+def _count_livestock(company: str) -> int:
+    """Count active animals for company."""
+    try:
+        from supabase_db import get_client
+        res = (get_client().table("animals")
+               .select("id", count="exact")
+               .eq("company", company)
+               .eq("status", "active")
+               .execute())
+        return res.count or 0
+    except Exception:
+        return 0
+
+def get_trial_status(username: str, module: str = None) -> dict:
     from supabase_db import get_user
     user = get_user(username)
     if not user:
         return _empty_status()
+
     role         = user.get("role","exporter")
     company_name = user.get("company","")
     rec          = ensure_company(company_name, user.get("created_at"))
     if not rec:
         return _empty_status()
+
+    # Auto-detect module if not passed
+    if module is None:
+        mod_str = user.get("module","🌿 VeriPath Crops")
+        module  = "livestock" if "Livestock" in mod_str else "crops"
+
     tier = rec.get("subscription_tier","trial")
     now  = datetime.now(timezone.utc)
+
+    # Get container count based on module
+    if module == "livestock":
+        containers_used = _count_livestock(company_name)
+        unit_label      = "animals"
+        trial_cap       = 3
+    else:
+        containers_used = rec.get("containers_used", 0)
+        unit_label      = "consignments"
+        trial_cap       = 3
 
     if tier != "trial":
         expires_str = rec.get("tier_expires_at")
@@ -58,9 +131,9 @@ def get_trial_status(username: str) -> dict:
                     expires_dt = expires_dt.replace(tzinfo=timezone.utc)
                 if now > expires_dt:
                     tier = "expired_paid"
-            except:
+            except Exception:
                 pass
-        cap = PRICING_TIERS.get(tier, {}).get("container_cap", 9_999)
+        cap = _ALL_TIERS.get(tier, {}).get("container_cap", 9_999)
         return {
             "is_trial":        False,
             "is_expired":      tier == "expired_paid",
@@ -69,10 +142,12 @@ def get_trial_status(username: str) -> dict:
             "expiry_date":     str(expires_str)[:10] if expires_str else "—",
             "tier":            tier,
             "container_cap":   cap,
-            "containers_used": rec.get("containers_used", 0),
-            "overage":         rec.get("containers_used", 0) >= cap and cap < 9_999,
+            "containers_used": containers_used,
+            "unit_label":      unit_label,
+            "overage":         containers_used >= cap and cap < 9_999,
             "company_name":    rec.get("company_name", company_name),
             "role":            role,
+            "module":          module,
         }
 
     trial_start = rec.get("trial_started_at", now.isoformat())
@@ -80,8 +155,9 @@ def get_trial_status(username: str) -> dict:
         start_dt = datetime.fromisoformat(str(trial_start))
         if start_dt.tzinfo is None:
             start_dt = start_dt.replace(tzinfo=timezone.utc)
-    except:
+    except Exception:
         start_dt = now
+
     expiry_dt = start_dt + timedelta(days=TRIAL_DAYS)
     delta     = expiry_dt - now
     days_left = max(0, delta.days)
@@ -93,24 +169,28 @@ def get_trial_status(username: str) -> dict:
         "days_remaining":  days_left,
         "expiry_date":     expiry_dt.strftime("%d %b %Y"),
         "tier":            "trial",
-        "container_cap":   3,
-        "containers_used": rec.get("containers_used", 0),
+        "container_cap":   trial_cap,
+        "containers_used": containers_used,
+        "unit_label":      unit_label,
         "overage":         False,
         "company_name":    rec.get("company_name", company_name),
         "role":            role,
+        "module":          module,
     }
 
-def _empty_status() -> dict:
+def _empty_status(module: str = "crops") -> dict:
     return {
         "is_trial": True, "is_expired": False, "is_warning": False,
         "days_remaining": 14, "expiry_date": "—", "tier": "trial",
-        "container_cap": 3, "containers_used": 0, "overage": False,
-        "company_name": "—", "role": "exporter",
+        "container_cap": 3, "containers_used": 0,
+        "unit_label": "consignments" if module == "crops" else "animals",
+        "overage": False, "company_name": "—", "role": "exporter",
+        "module": module,
     }
 
 def set_company_subscription(company_name: str, tier: str,
                               months: int = 1) -> bool:
-    if tier not in PRICING_TIERS:
+    if tier not in _ALL_TIERS:
         return False
     now        = datetime.now(timezone.utc)
     expires_at = (now + timedelta(days=30 * months)).isoformat()
@@ -119,11 +199,16 @@ def set_company_subscription(company_name: str, tier: str,
 def list_all_companies(exporters_only: bool = False) -> list[dict]:
     return list_companies(exporters_only=exporters_only)
 
-def render_trial_banner(username: str, role: str = "exporter"):
+def get_module_tiers(module: str = "crops") -> dict:
+    return PRICING_TIERS.get(module, PRICING_TIERS["crops"])
+
+def render_trial_banner(username: str, role: str = "exporter", module: str = None):
     import streamlit as st
     if role == "admin":
         return
-    status = get_trial_status(username)
+    if module is None:
+        module = _get_module(username)
+    status = get_trial_status(username, module=module)
 
     if status["is_expired"]:
         label = "TRIAL EXPIRED" if status["is_trial"] else "SUBSCRIPTION EXPIRED"
@@ -138,7 +223,7 @@ def render_trial_banner(username: str, role: str = "exporter"):
             </div>
         </div>
         """, unsafe_allow_html=True)
-        _render_pricing_tiers()
+        _render_pricing_tiers(module)
         _render_whatsapp_button(status["company_name"])
         st.stop()
 
@@ -148,7 +233,7 @@ def render_trial_banner(username: str, role: str = "exporter"):
         <div style='background:#1c1400;border:2px solid #d97706;border-radius:12px;
                     padding:14px 20px;margin-bottom:20px;display:flex;
                     align-items:center;gap:16px'>
-            <div style='font-size:1.5rem'>⚠️</div>
+            <div style='font-size:1.5rem'>⚠</div>
             <div>
                 <b style='color:#fbbf24;font-family:Space Mono,monospace'>
                     {d} DAY{"S" if d!=1 else ""} LEFT — {status["company_name"].upper()}
@@ -161,6 +246,7 @@ def render_trial_banner(username: str, role: str = "exporter"):
         """, unsafe_allow_html=True)
 
     elif status["is_trial"]:
+        unit = status["unit_label"]
         st.markdown(f"""
         <div style='background:#0d1224;border:1px solid #1e3a5f;border-radius:10px;
                     padding:10px 16px;margin-bottom:16px;display:flex;
@@ -176,61 +262,79 @@ def render_trial_banner(username: str, role: str = "exporter"):
         """, unsafe_allow_html=True)
 
     if status["overage"]:
+        unit = status["unit_label"]
         st.markdown(f"""
         <div style='background:#1a0a0a;border:1px solid #dc2626;border-radius:10px;
                     padding:14px 18px;margin-bottom:16px'>
-            <b style='color:#f87171'>🚨 CONSIGNMENT LIMIT REACHED</b><br>
+            <b style='color:#f87171'>🚨 {unit.upper()} LIMIT REACHED</b><br>
             <span style='color:#94a3b8;font-size:0.85rem'>
-                {status["containers_used"]} / {status["container_cap"]} used
+                {status["containers_used"]} / {status["container_cap"]} {unit} used
                 on <b style='color:#e8eaf0'>{status["tier"]}</b> plan.
             </span>
         </div>
         """, unsafe_allow_html=True)
         _render_whatsapp_button(status["company_name"])
 
-def render_container_tracker(username: str):
+def render_container_tracker(username: str, module: str = None):
     import streamlit as st
-    status    = get_trial_status(username)
+    if module is None:
+        module = _get_module(username)
+    status    = get_trial_status(username, module=module)
     used      = status["containers_used"]
     cap       = status["container_cap"]
     tier      = status["tier"]
+    unit      = status["unit_label"]
     cap_label = "∞" if cap >= 9_999 else str(cap)
-    pct       = min(100, int(used/cap*100)) if cap < 9_999 else 0
+    pct       = min(100, int(used/cap*100)) if cap < 9_999 and cap > 0 else 0
     color     = "#dc2626" if pct >= 90 else "#d97706" if pct >= 70 else "#16a34a"
     label     = "Trial Usage" if tier == "trial" else f"{tier} Plan"
+
+    # Module icon
+    mod_icon = "🐄" if module == "livestock" else "🌿"
+
     st.sidebar.markdown(f"""
     <div style='background:#0d1224;border:1px solid #1e3a5f;border-radius:8px;
                 padding:10px 12px;margin-top:8px'>
         <div style='font-size:0.7rem;color:#64748b;font-family:Space Mono,monospace;
-                    text-transform:uppercase;letter-spacing:0.08em'>{label}</div>
+                    text-transform:uppercase;letter-spacing:0.08em'>
+            {mod_icon} {label}
+        </div>
         <div style='margin:6px 0 4px;background:#1e2d45;border-radius:4px;height:6px'>
             <div style='width:{pct}%;background:{color};height:6px;
-                         border-radius:4px'></div>
+                        border-radius:4px'></div>
         </div>
         <div style='font-size:0.75rem;color:#94a3b8'>
-            {used} / {cap_label} consignments
+            {used} / {cap_label} {unit}
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-def _render_pricing_tiers():
+def _render_pricing_tiers(module: str = "crops"):
     import streamlit as st
-    st.markdown("### 💳 Choose Your Plan")
-    cols = st.columns(len(PRICING_TIERS))
-    for i, (name, info) in enumerate(PRICING_TIERS.items()):
+    tiers = get_module_tiers(module)
+    unit  = "animals" if module == "livestock" else "consignments"
+    st.markdown(f"### 💳 Choose Your Plan")
+    st.markdown(
+        f"<small style='color:#64748b'>Prices set by admin. "
+        f"Contact VeriPath to activate.</small>",
+        unsafe_allow_html=True
+    )
+    cols = st.columns(len(tiers))
+    for i, (name, info) in enumerate(tiers.items()):
         with cols[i]:
             cap_label = "Unlimited" if info["container_cap"] >= 9_999 else str(info["container_cap"])
+            price_str = (f"KES {info['price_kes']:,}"
+                         if info["price_kes"] > 0 else "Contact us")
             st.markdown(f"""
             <div style='background:#0d1224;border:2px solid {info["color"]};
                         border-radius:14px;padding:20px 16px;text-align:center'>
                 <div style='font-family:Space Mono,monospace;font-size:0.85rem;
-                             color:{info["color"]};font-weight:700'>{name.upper()}</div>
-                <div style='font-size:1.4rem;font-weight:700;color:#e8eaf0;margin:10px 0'>
-                    KES {info["price_kes"]:,}
-                </div>
+                            color:{info["color"]};font-weight:700'>{name.upper()}</div>
+                <div style='font-size:1.4rem;font-weight:700;
+                            color:#e8eaf0;margin:10px 0'>{price_str}</div>
                 <div style='color:#64748b;font-size:0.75rem'>/month</div>
                 <div style='color:#94a3b8;font-size:0.78rem;margin-top:8px'>
-                    {info["desc"]}
+                    {cap_label} {unit}
                 </div>
             </div>
             """, unsafe_allow_html=True)
