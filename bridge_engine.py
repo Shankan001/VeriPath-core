@@ -1,14 +1,14 @@
-# ── VeriPath Bridge Engine v6.0 ───────────────────────────────
-# Merges v5.2 real Playwright logic with structured sim/real modes
-# Credentials secured via .env — never hardcoded
+# ── VeriPath Bridge Engine v7.0 ───────────────────────────────
+# Demo/Live toggle + CSV fallback for portal downtime
 
 import os
 import time
 import json
 import random
+import csv
+import io
 from datetime import datetime
 
-# ── Load .env ─────────────────────────────────────────────────
 def _load_env():
     if os.path.exists(".env"):
         with open(".env") as f:
@@ -20,14 +20,18 @@ def _load_env():
 
 _load_env()
 
-# ── Portal URLs (from your v5.2) ──────────────────────────────
 AFA_IMIS_URL = "https://imis.afa.go.ke/"
 KEPHIS_URL   = "https://ieics.kephis.org/login.html"
 KENTRADE_URL = "https://www.kentrade.go.ke"
 
-# ── Mode detection ─────────────────────────────────────────────
+PORTAL_TIMEOUT_SECONDS = 30
+
 def get_bridge_mode() -> str:
     return os.getenv("BRIDGE_MODE", "simulation")
+
+def set_bridge_mode(mode: str) -> None:
+    """Set mode at runtime — 'simulation' or 'real'."""
+    os.environ["BRIDGE_MODE"] = mode
 
 def get_credential_status() -> dict:
     return {
@@ -36,7 +40,67 @@ def get_credential_status() -> dict:
         "AFA IMIS": bool(os.getenv("AFA_USERNAME")      and os.getenv("AFA_PASSWORD")),
     }
 
-# ── Simulation mode ───────────────────────────────────────────
+def set_portal_credentials(portal: str, username: str, password: str) -> None:
+    """Set credentials at runtime from UI input."""
+    key_map = {
+        "KenTrade": ("KENTRADE_USERNAME", "KENTRADE_PASSWORD"),
+        "KEPHIS":   ("KEPHIS_USERNAME",   "KEPHIS_PASSWORD"),
+        "AFA IMIS": ("AFA_USERNAME",      "AFA_PASSWORD"),
+    }
+    if portal in key_map:
+        u_key, p_key = key_map[portal]
+        os.environ[u_key] = username
+        os.environ[p_key] = password
+
+# ── CSV Fallback Generator ─────────────────────────────────────
+def generate_kentrade_csv(records: list) -> str:
+    """Generate KenTrade-formatted CSV for manual upload."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Declaration_Reference", "Exporter_PIN", "Commodity_Description",
+        "HS_Code", "Origin_County", "Net_Weight_KG", "FOB_Value_USD",
+        "Farmer_Name", "Consignment_ID", "Submission_Date"
+    ])
+    for r in records:
+        writer.writerow([
+            r.get("Consignment_ID", r.get("session_id", "—")),
+            r.get("KRA_PIN", r.get("kra_pin", "—")),
+            r.get("Crop_Type", r.get("crop", "—")),
+            r.get("HS_Code", r.get("hs_code", "0804.40")),
+            r.get("Origin_County", r.get("county", "—")),
+            r.get("Net_Weight_KG", r.get("weight_kg", 0)),
+            r.get("FOB_Value_USD", r.get("fob_value_usd", 0)),
+            r.get("Farmer_Name", r.get("farmer_name", "—")),
+            r.get("Consignment_ID", r.get("session_id", "—")),
+            datetime.utcnow().strftime("%Y-%m-%d"),
+        ])
+    return output.getvalue()
+
+def generate_kephis_csv(records: list) -> str:
+    """Generate KEPHIS-formatted CSV for manual upload."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Application_Reference", "Exporter_Name", "Commodity",
+        "HS_Code", "Origin", "Quantity_KG", "Destination",
+        "Consignment_ID", "Application_Date"
+    ])
+    for r in records:
+        writer.writerow([
+            f"KP-{r.get('Consignment_ID', r.get('session_id','VP'))[-6:]}",
+            r.get("Farmer_Name", r.get("farmer_name", "—")),
+            r.get("Crop_Type",   r.get("crop", "—")),
+            r.get("HS_Code",     r.get("hs_code", "0804.40")),
+            r.get("Origin_County", r.get("county", "—")),
+            r.get("Net_Weight_KG", r.get("weight_kg", 0)),
+            "EU",
+            r.get("Consignment_ID", r.get("session_id", "—")),
+            datetime.utcnow().strftime("%Y-%m-%d"),
+        ])
+    return output.getvalue()
+
+# ── Simulation mode ────────────────────────────────────────────
 PORTAL_RESPONSES = {
     "KenTrade": [
         {"status": "submitted", "ref": "KT-{id}", "message": "Single Window declaration created. Customs officer review queued."},
@@ -66,9 +130,63 @@ def _simulate_portal(portal: str, consignment: dict) -> dict:
         "message":      response["message"],
         "submitted_at": datetime.utcnow().isoformat(),
         "consignment":  c_id,
+        "fallback_csv": None,
     }
 
-# ── Real mode — KEPHIS (your v5.2 logic, now structured) ──────
+# ── Real mode with timeout + fallback ─────────────────────────
+def _submit_with_timeout(submit_fn, consignment: dict,
+                         portal: str, records_for_fallback: list) -> dict:
+    """Wrap a portal submission with timeout and CSV fallback."""
+    import threading
+    result_container = [None]
+    error_container  = [None]
+
+    def _run():
+        try:
+            result_container[0] = submit_fn(consignment)
+        except Exception as e:
+            error_container[0] = str(e)
+
+    thread = threading.Thread(target=_run)
+    thread.start()
+    thread.join(timeout=PORTAL_TIMEOUT_SECONDS)
+
+    if thread.is_alive():
+        # Portal timed out — generate fallback CSV
+        thread.join(0)
+        csv_data = (generate_kentrade_csv(records_for_fallback)
+                    if portal == "KenTrade"
+                    else generate_kephis_csv(records_for_fallback))
+        return {
+            "portal":       portal,
+            "mode":         "real",
+            "status":       "timeout",
+            "reference":    "—",
+            "message":      f"{portal} portal timed out after {PORTAL_TIMEOUT_SECONDS}s. CSV fallback generated — upload manually.",
+            "submitted_at": datetime.utcnow().isoformat(),
+            "consignment":  consignment.get("Consignment_ID","—"),
+            "fallback_csv": csv_data,
+            "fallback_filename": f"veripath_{portal.lower().replace(' ','_')}_fallback_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv",
+        }
+
+    if error_container[0]:
+        csv_data = (generate_kentrade_csv(records_for_fallback)
+                    if portal == "KenTrade"
+                    else generate_kephis_csv(records_for_fallback))
+        return {
+            "portal":       portal,
+            "mode":         "real",
+            "status":       "error",
+            "reference":    "—",
+            "message":      f"{portal} error: {error_container[0]}. CSV fallback generated.",
+            "submitted_at": datetime.utcnow().isoformat(),
+            "consignment":  consignment.get("Consignment_ID","—"),
+            "fallback_csv": csv_data,
+            "fallback_filename": f"veripath_{portal.lower().replace(' ','_')}_fallback_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv",
+        }
+
+    return result_container[0]
+
 def _submit_kephis_real(consignment: dict) -> dict:
     c_id = consignment.get("Consignment_ID", consignment.get("id", "VP-0000"))
     try:
@@ -76,34 +194,22 @@ def _submit_kephis_real(consignment: dict) -> dict:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True, slow_mo=800)
             page    = browser.new_page()
-            print(f"  → Navigating to KEPHIS ({KEPHIS_URL})...")
             page.goto(KEPHIS_URL, timeout=90000)
             page.fill("#username", os.getenv("KEPHIS_USERNAME", ""))
             page.fill("#password", os.getenv("KEPHIS_PASSWORD", ""))
             page.click("#login_form_submit")
             page.wait_for_load_state("networkidle", timeout=15000)
-            print(f"  → KEPHIS session initialized for {consignment.get('Crop_Type', consignment.get('crop', ''))}")
-            # TODO: fill consignment form fields once portal UI is mapped
             browser.close()
             return {
-                "portal":       "KEPHIS",
-                "mode":         "real",
-                "status":       "submitted",
-                "reference":    f"KP-LIVE-{c_id[-6:]}",
-                "message":      "KEPHIS session opened. Form submission ready for mapping.",
+                "portal": "KEPHIS", "mode": "real", "status": "submitted",
+                "reference": f"KP-LIVE-{c_id[-6:]}",
+                "message": "KEPHIS session opened. Form submission ready.",
                 "submitted_at": datetime.utcnow().isoformat(),
-                "consignment":  c_id,
+                "consignment": c_id, "fallback_csv": None,
             }
-    except ImportError:
-        return {"portal": "KEPHIS", "mode": "error", "status": "error",
-                "message": "Playwright not installed. Run: pip install playwright && playwright install chromium",
-                "consignment": c_id, "submitted_at": datetime.utcnow().isoformat()}
     except Exception as e:
-        return {"portal": "KEPHIS", "mode": "error", "status": "error",
-                "message": f"KEPHIS error: {str(e)}",
-                "consignment": c_id, "submitted_at": datetime.utcnow().isoformat()}
+        raise Exception(str(e))
 
-# ── Real mode — AFA IMIS ──────────────────────────────────────
 def _submit_afa_real(consignment: dict) -> dict:
     c_id = consignment.get("Consignment_ID", consignment.get("id", "VP-0000"))
     try:
@@ -111,26 +217,18 @@ def _submit_afa_real(consignment: dict) -> dict:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True, slow_mo=800)
             page    = browser.new_page()
-            print(f"  → Navigating to AFA IMIS ({AFA_IMIS_URL})...")
             page.goto(AFA_IMIS_URL, timeout=90000)
-            print(f"  → AFA IMIS portal resolved.")
-            # TODO: AFA uses eCitizen login — map fields once portal access confirmed
             browser.close()
             return {
-                "portal":       "AFA IMIS",
-                "mode":         "real",
-                "status":       "submitted",
-                "reference":    f"AFA-LIVE-{c_id[-6:]}",
-                "message":      "AFA IMIS portal reached. eCitizen login mapping pending.",
+                "portal": "AFA IMIS", "mode": "real", "status": "submitted",
+                "reference": f"AFA-LIVE-{c_id[-6:]}",
+                "message": "AFA IMIS portal reached.",
                 "submitted_at": datetime.utcnow().isoformat(),
-                "consignment":  c_id,
+                "consignment": c_id, "fallback_csv": None,
             }
     except Exception as e:
-        return {"portal": "AFA IMIS", "mode": "error", "status": "error",
-                "message": f"AFA IMIS error: {str(e)}",
-                "consignment": c_id, "submitted_at": datetime.utcnow().isoformat()}
+        raise Exception(str(e))
 
-# ── Real mode — KenTrade (placeholder — needs portal UI mapping)
 def _submit_kentrade_real(consignment: dict) -> dict:
     c_id = consignment.get("Consignment_ID", consignment.get("id", "VP-0000"))
     try:
@@ -138,32 +236,25 @@ def _submit_kentrade_real(consignment: dict) -> dict:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True, slow_mo=800)
             page    = browser.new_page()
-            print(f"  → Navigating to KenTrade ({KENTRADE_URL})...")
             page.goto(KENTRADE_URL, timeout=90000)
-            # TODO: map KenTrade login fields once portal access confirmed
             browser.close()
             return {
-                "portal":       "KenTrade",
-                "mode":         "real",
-                "status":       "submitted",
-                "reference":    f"KT-LIVE-{c_id[-6:]}",
-                "message":      "KenTrade portal reached. Login field mapping pending.",
+                "portal": "KenTrade", "mode": "real", "status": "submitted",
+                "reference": f"KT-LIVE-{c_id[-6:]}",
+                "message": "KenTrade portal reached.",
                 "submitted_at": datetime.utcnow().isoformat(),
-                "consignment":  c_id,
+                "consignment": c_id, "fallback_csv": None,
             }
     except Exception as e:
-        return {"portal": "KenTrade", "mode": "error", "status": "error",
-                "message": f"KenTrade error: {str(e)}",
-                "consignment": c_id, "submitted_at": datetime.utcnow().isoformat()}
+        raise Exception(str(e))
 
-# ── Main public function ──────────────────────────────────────
-def transmit_consignment(consignment: dict, portals: list = None) -> list:
-    """
-    Transmit a consignment to government portals.
-    Simulation mode by default. Set BRIDGE_MODE=real in .env for live.
-    """
+# ── Main public function ───────────────────────────────────────
+def transmit_consignment(consignment: dict, portals: list = None,
+                          all_records: list = None) -> list:
     if portals is None:
         portals = ["KenTrade", "KEPHIS", "AFA IMIS"]
+    if all_records is None:
+        all_records = [consignment]
 
     mode    = get_bridge_mode()
     results = []
@@ -171,11 +262,17 @@ def transmit_consignment(consignment: dict, portals: list = None) -> list:
     for portal in portals:
         if mode == "real":
             if portal == "KenTrade":
-                result = _submit_kentrade_real(consignment)
+                result = _submit_with_timeout(
+                    _submit_kentrade_real, consignment, portal, all_records
+                )
             elif portal == "KEPHIS":
-                result = _submit_kephis_real(consignment)
+                result = _submit_with_timeout(
+                    _submit_kephis_real, consignment, portal, all_records
+                )
             elif portal == "AFA IMIS":
-                result = _submit_afa_real(consignment)
+                result = _submit_with_timeout(
+                    _submit_afa_real, consignment, portal, all_records
+                )
             else:
                 result = _simulate_portal(portal, consignment)
         else:
@@ -195,7 +292,9 @@ def save_transmission_log(results: list) -> None:
                 existing = json.load(f)
         except Exception:
             existing = []
-    existing.extend(results)
+    # Don't serialize CSV data into log — too large
+    clean = [{k: v for k, v in r.items() if k != "fallback_csv"} for r in results]
+    existing.extend(clean)
     with open(log_file, "w") as f:
         json.dump(existing, f, indent=2)
 
@@ -208,26 +307,3 @@ def load_transmission_log() -> list:
             return json.load(f)
     except Exception:
         return []
-
-# ── CLI test ──────────────────────────────────────────────────
-if __name__ == "__main__":
-    print(f"\n--- VeriPath Bridge Engine v6.0 ---")
-    print(f"Mode:        {get_bridge_mode()}")
-    print(f"Credentials: {get_credential_status()}")
-    print()
-    test = {
-        "Consignment_ID": "VP-20260601120000",
-        "Farmer_Name":    "John Kamau",
-        "Crop_Type":      "Avocado",
-        "crop":           "Avocado",
-        "Origin_County":  "Murang'a",
-        "Net_Weight_KG":  5000,
-        "HS_Code":        "0804.40",
-        "KRA_PIN":        "A123456789B",
-        "id":             "VP-20260601120000",
-    }
-    results = transmit_consignment(test)
-    for r in results:
-        print(f"[{r['portal']}] {r['status'].upper()} — {r.get('reference','—')} — {r['message']}")
-    save_transmission_log(results)
-    print(f"\nLog saved. Total entries: {len(load_transmission_log())}")

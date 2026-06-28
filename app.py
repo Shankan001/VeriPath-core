@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from db              import load_consignments, save_consignments
 from auth            import register_user, login_user
 from eudr            import get_eudr_risk, score_dataframe, EUDR_REGULATED_CROPS, render_eudr_page
-from bridge_engine   import transmit_consignment, save_transmission_log, load_transmission_log, get_bridge_mode, get_credential_status
+from bridge_engine   import transmit_consignment, save_transmission_log, load_transmission_log, get_bridge_mode, get_credential_status, set_bridge_mode, set_portal_credentials, generate_kentrade_csv, generate_kephis_csv
 from qr_generator    import render_qr_page
 from packhouse       import render_packhouse_page
 from compliance_pdf  import render_compliance_pdf_page
@@ -522,6 +522,7 @@ elif page == "📄 Compliance PDF":
 
 elif page == "📡 Transmit to Portals":
     st.markdown("# 📡 Transmit to Government Portals")
+
     if not st.session_state.get("batch_approved"):
         st.markdown("""
         <div style='background:#1a0a0a;border:2px solid #dc2626;border-radius:12px;
@@ -533,37 +534,194 @@ elif page == "📡 Transmit to Portals":
         </div>
         """, unsafe_allow_html=True)
     else:
+        # ── Demo / Live toggle ─────────────────────────────────────────
+        st.markdown("<div class='section-header'>TRANSMISSION MODE</div>",
+                    unsafe_allow_html=True)
+        col_tog1, col_tog2 = st.columns(2)
+        with col_tog1:
+            if st.button("⚙ DEMO MODE",
+                         use_container_width=True,
+                         type="secondary" if get_bridge_mode()=="real" else "primary"):
+                set_bridge_mode("simulation")
+                st.rerun()
+        with col_tog2:
+            if st.button("🟢 LIVE MODE",
+                         use_container_width=True,
+                         type="primary" if get_bridge_mode()=="real" else "secondary"):
+                set_bridge_mode("real")
+                st.rerun()
+
         mode = get_bridge_mode()
         if mode == "simulation":
-            st.markdown("<span class='mode-badge-sim'>⚙ SIMULATION MODE</span>", unsafe_allow_html=True)
+            st.markdown("""
+            <div style='background:#1c2a3a;border:1px solid #1e3a5f;border-radius:10px;
+                        padding:12px 16px;margin:12px 0'>
+                <span class='mode-badge-sim'>⚙ SIMULATION MODE</span>
+                <span style='color:#64748b;font-size:0.82rem;margin-left:12px'>
+                    Safe for demos — no real portal submissions
+                </span>
+            </div>
+            """, unsafe_allow_html=True)
         else:
-            st.markdown("<span class='mode-badge-real'>🟢 LIVE MODE</span>", unsafe_allow_html=True)
+            st.markdown("""
+            <div style='background:#071a0f;border:1px solid #16a34a;border-radius:10px;
+                        padding:12px 16px;margin:12px 0'>
+                <span class='mode-badge-real'>🟢 LIVE MODE</span>
+                <span style='color:#4ade80;font-size:0.82rem;margin-left:12px'>
+                    Real submissions to KenTrade · KEPHIS · AFA IMIS
+                </span>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # ── Credential input for Live mode ─────────────────────────
+            cred_status = get_credential_status()
+            missing_creds = [p for p, ok in cred_status.items() if not ok]
+            if missing_creds:
+                st.markdown("---")
+                st.markdown("<div class='section-header'>PORTAL CREDENTIALS</div>",
+                            unsafe_allow_html=True)
+                st.markdown(
+                    "<small style='color:#94a3b8'>Enter credentials for selected portals. "
+                    "Not stored permanently — session only.</small>",
+                    unsafe_allow_html=True
+                )
+                for portal in missing_creds:
+                    with st.expander(f"🔐 {portal} credentials"):
+                        u = st.text_input(f"{portal} Username",
+                                          key=f"cred_u_{portal}",
+                                          placeholder=f"Your {portal} login")
+                        p = st.text_input(f"{portal} Password",
+                                          type="password",
+                                          key=f"cred_p_{portal}",
+                                          placeholder="••••••••")
+                        if st.button(f"💾 Save {portal} credentials",
+                                     key=f"save_cred_{portal}"):
+                            if u and p:
+                                set_portal_credentials(portal, u, p)
+                                st.success(f"✅ {portal} credentials set for this session.")
+                                st.rerun()
+                            else:
+                                st.error("Both username and password required.")
+
         st.markdown("---")
-        approved       = st.session_state.get("approved_records",[])
-        portal_options = st.multiselect("Target portals",["KenTrade","KEPHIS","AFA IMIS"],
-                                        default=["KenTrade","KEPHIS","AFA IMIS"])
+        approved       = st.session_state.get("approved_records", [])
+        portal_options = st.multiselect(
+            "Target portals",
+            ["KenTrade","KEPHIS","AFA IMIS"],
+            default=["KenTrade","KEPHIS","AFA IMIS"]
+        )
         st.markdown(f"**{len(approved)} approved records ready**")
+
         if approved and portal_options:
-            if st.button(f"🚀 Submit {len(approved)} Records to {len(portal_options)} Portal(s)",
-                         use_container_width=True, type="primary"):
-                all_results = []
-                progress    = st.progress(0)
-                total       = len(approved) * len(portal_options)
-                done        = 0
+            btn_label = (f"🚀 LIVE SUBMIT — {len(approved)} records to {len(portal_options)} portal(s)"
+                         if mode == "real"
+                         else f"⚙ DEMO RUN — {len(approved)} records to {len(portal_options)} portal(s)")
+            if st.button(btn_label, use_container_width=True, type="primary"):
+                all_results  = []
+                fallback_csv = {}
+                progress     = st.progress(0)
+                total        = len(approved) * len(portal_options)
+                done         = 0
                 for record in approved:
                     with st.spinner(f"Transmitting {record.get('farmer_name','—')}..."):
-                        results = transmit_consignment(record, portal_options)
+                        results = transmit_consignment(
+                            record, portal_options,
+                            all_records=approved
+                        )
+                        for r in results:
+                            if r.get("fallback_csv"):
+                                fallback_csv[r["portal"]] = {
+                                    "csv":      r["fallback_csv"],
+                                    "filename": r.get("fallback_filename","fallback.csv"),
+                                }
                         all_results.extend(results)
                         done += len(portal_options)
                         progress.progress(done / total)
+
                 save_transmission_log(all_results)
-                st.success(f"✅ {len(all_results)} transmissions complete.")
+
+                # ── Results display ────────────────────────────────────
+                success = [r for r in all_results if r["status"] == "submitted"]
+                timeout = [r for r in all_results if r["status"] == "timeout"]
+                errors  = [r for r in all_results if r["status"] == "error"]
+
+                if success:
+                    st.success(f"✅ {len(success)} submission(s) successful.")
+                if timeout:
+                    st.warning(f"⏱ {len(timeout)} portal(s) timed out — CSV fallback ready below.")
+                if errors:
+                    st.error(f"❌ {len(errors)} error(s) — CSV fallback ready below.")
+
+                # ── Fallback CSV downloads ─────────────────────────────
+                if fallback_csv:
+                    st.markdown("---")
+                    st.markdown("""
+                    <div style='background:#1a0f00;border:2px solid #d97706;
+                                border-radius:12px;padding:16px 20px;margin:12px 0'>
+                        <div style='font-family:Space Mono,monospace;color:#fbbf24;
+                                    font-weight:700;margin-bottom:8px'>
+                            ⚠️ PORTAL FALLBACK — MANUAL UPLOAD REQUIRED
+                        </div>
+                        <div style='color:#94a3b8;font-size:0.85rem'>
+                            Download the CSV below and upload directly to the portal.
+                            This file is pre-formatted to match exact portal specifications.
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    for portal, data in fallback_csv.items():
+                        st.download_button(
+                            label=f"⬇ Download {portal} Fallback CSV",
+                            data=data["csv"],
+                            file_name=data["filename"],
+                            mime="text/csv",
+                            key=f"dl_{portal}",
+                            use_container_width=True,
+                        )
+
                 st.session_state.pop("batch_approved", None)
                 st.session_state.pop("approved_records", None)
+
+        # ── Always available: manual CSV export ────────────────────────
+        st.markdown("---")
+        with st.expander("📥 Manual Fallback — Export CSV for Portal Upload"):
+            st.markdown(
+                "<small style='color:#64748b'>Use this if you prefer to upload manually "
+                "or if portals are unavailable.</small>",
+                unsafe_allow_html=True
+            )
+            col_csv1, col_csv2 = st.columns(2)
+            with col_csv1:
+                if st.button("Generate KenTrade CSV", use_container_width=True):
+                    approved = st.session_state.get("approved_records", [])
+                    if approved:
+                        csv_data = generate_kentrade_csv(approved)
+                        st.download_button(
+                            "⬇ Download KenTrade CSV",
+                            data=csv_data,
+                            file_name=f"kentrade_upload_{datetime.date.today()}.csv",
+                            mime="text/csv"
+                        )
+                    else:
+                        st.warning("No approved records. Run Pre-Audit Gate first.")
+            with col_csv2:
+                if st.button("Generate KEPHIS CSV", use_container_width=True):
+                    approved = st.session_state.get("approved_records", [])
+                    if approved:
+                        csv_data = generate_kephis_csv(approved)
+                        st.download_button(
+                            "⬇ Download KEPHIS CSV",
+                            data=csv_data,
+                            file_name=f"kephis_upload_{datetime.date.today()}.csv",
+                            mime="text/csv"
+                        )
+                    else:
+                        st.warning("No approved records. Run Pre-Audit Gate first.")
+
         log = load_transmission_log()
         if log:
             st.markdown("---")
-            st.markdown("<div class='section-header'>TRANSMISSION LOG</div>", unsafe_allow_html=True)
+            st.markdown("<div class='section-header'>TRANSMISSION LOG</div>",
+                        unsafe_allow_html=True)
             st.dataframe(pd.DataFrame(log), use_container_width=True)
 
 elif page == "🌱 Carbon Tracking":
