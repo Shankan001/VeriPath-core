@@ -402,8 +402,29 @@ def get_hs_code(crop):
 # ── Sidebar ────────────────────────────────────────────────────────────────
 profile = st.session_state["user_profile"]
 role    = profile.get("role","record_keeper")
-module  = profile.get("module","🌿 VeriPath Crops")
-pages   = ROLE_PAGES.get(role, ["📦 Packhouse Intake"])
+module  = profile.get("module") or (
+    "🐄 VeriPath Livestock"
+    if profile.get("role") in ("diaspora_owner","veterinarian","herdsman","farm_manager")
+    else "🌿 VeriPath Crops"
+)
+# For admin — show pages based on their active module
+if role == "admin" and module == "🐄 VeriPath Livestock":
+    pages = [
+        "📊 Farm Overview",
+        "🐄 Animal Registry",
+        "🌡 Temperature Entry",
+        "📋 Daily Symptom Log",
+        "🧪 Disease Probability",
+        "🚨 Clinical Alerts",
+        "🌍 My Animals",
+        "🌡 Health Alerts",
+        "💰 My Earnings",
+        "🔧 Hardware Registry",
+        "🔑 Invite Codes",
+        "👥 My Team",
+    ]
+else:
+    pages = ROLE_PAGES.get(role, ["📦 Packhouse Intake"])
 
 st.sidebar.markdown("## 🏗 VeriPath Enterprise")
 st.sidebar.markdown(
@@ -421,6 +442,20 @@ st.sidebar.markdown(
     f"{module}</div>",
     unsafe_allow_html=True
 )
+
+# Module switcher — admin and multi-module users only
+if role == "admin":
+    st.sidebar.markdown("**Switch Module**")
+    switched = st.sidebar.radio(
+        "Active module",
+        ["🌿 VeriPath Crops", "🐄 VeriPath Livestock"],
+        index=0 if module == "🌿 VeriPath Crops" else 1,
+        key="module_switcher"
+    )
+    if switched != module:
+        st.session_state["user_profile"]["module"] = switched
+        st.rerun()
+    module = switched
 
 st.sidebar.markdown("---")
 page = st.sidebar.radio("", pages)
