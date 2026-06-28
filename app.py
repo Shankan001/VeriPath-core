@@ -162,7 +162,8 @@ ROLE_PAGES = {
     "herdsman": ["📋 Daily Symptom Log","🐄 My Herd","🌡 Temperature Entry"],
     "farm_manager": [
         "📊 Farm Overview","🐄 Animal Registry","🌡 Temperature Entry",
-        "📋 Daily Symptom Log","🌡 Health Monitoring","🔧 Hardware Registry","👥 My Team",
+        "📋 Daily Symptom Log","🌡 Health Monitoring","🔧 Hardware Registry",
+        "💰 Cost of Production","🥛 Milk Tracker","📈 Farm P&L","👥 My Team",
     ],
 }
 
@@ -907,3 +908,12 @@ elif page == "💳 Payments & Commissions":
 
 elif page == "🔧 Hardware Registry":
     render_hardware_registry(profile)
+
+elif page == "💰 Cost of Production":
+    render_cost_entry(profile)
+
+elif page == "🥛 Milk Tracker":
+    render_milk_tracker(profile)
+
+elif page == "📈 Farm P&L":
+    render_pnl_dashboard(profile)
