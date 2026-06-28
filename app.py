@@ -137,7 +137,7 @@ ROLE_PAGES = {
         "🌿 Outgrower Registry","📦 Packhouse Intake","📅 Daily Batch Reports",
         "🔍 Pre-Audit Gate","🌍 EUDR Risk Scorer","📄 Compliance PDF",
         "📡 Transmit to Portals","🌱 Carbon Tracking","🗺 Origin Map",
-        "👥 My Team","🗑 Demo Reset",
+        "👥 My Team",
     ],
     "admin": [
         "📊 Dashboard","📥 Data Ingestion","📑 Consignment Ledger",
@@ -429,27 +429,35 @@ render_trial_banner(profile["username"], role=profile.get("role","exporter"), mo
 # ── CROPS PAGES ───────────────────────────────────────────────────────────
 if page == "📊 Dashboard":
     st.markdown("# 📊 VeriPath Dashboard")
-    st.markdown("<p style='color:#64748b'>Real-time supply chain intelligence</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#64748b'>Real-time supply chain intelligence — 🌿 Crops Module</p>", unsafe_allow_html=True)
     from ledger_db import load_ledger as _ll
     _company = profile.get("company","") if role != "admin" else ""
     _ledger  = _ll(_company)
     df = pd.DataFrame(_ledger) if _ledger else pd.DataFrame(columns=LEDGER_COLS)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.markdown(f"""<div class='metric-card'><div class='metric-label'>Total Consignments</div>
-            <div class='metric-value'>{len(df)}</div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class='metric-card'>
+            <div class='metric-label'>TOTAL CONSIGNMENTS</div>
+            <div class='metric-value'>{len(df)}</div>
+        </div>""", unsafe_allow_html=True)
     with col2:
         tw = df["weight_kg"].astype(float).sum() if not df.empty and "weight_kg" in df.columns else 0
-        st.markdown(f"""<div class='metric-card'><div class='metric-label'>Total Weight (KG)</div>
-            <div class='metric-value'>{tw:,.0f}</div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class='metric-card'>
+            <div class='metric-label'>TOTAL WEIGHT (KG)</div>
+            <div class='metric-value'>{tw:,.0f}</div>
+        </div>""", unsafe_allow_html=True)
     with col3:
         tf = df["FOB_Value_USD"].astype(float).sum() if not df.empty and "FOB_Value_USD" in df.columns else 0
-        st.markdown(f"""<div class='metric-card'><div class='metric-label'>Total FOB Value</div>
-            <div class='metric-value'>${tf:,.2f}</div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class='metric-card'>
+            <div class='metric-label'>FOB VALUE (USD) 🇺🇸</div>
+            <div class='metric-value' style='color:#4ade80'>${tf:,.2f}</div>
+        </div>""", unsafe_allow_html=True)
     with col4:
         vp = df[df["PIN_Valid"]=="✅ Valid"].shape[0] if not df.empty and "PIN_Valid" in df.columns else 0
-        st.markdown(f"""<div class='metric-card'><div class='metric-label'>Verified PINs</div>
-            <div class='metric-value'>{vp}</div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class='metric-card'>
+            <div class='metric-label'>VERIFIED KRA PINs</div>
+            <div class='metric-value'>{vp}</div>
+        </div>""", unsafe_allow_html=True)
     if not df.empty:
         st.markdown("---")
         col_a, col_b = st.columns(2)
