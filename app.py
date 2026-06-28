@@ -83,8 +83,8 @@ MODULE_ROLES = {
         "icon": "🌿", "description": "Export compliance & EUDR traceability",
     },
     "🐄 VeriPath Livestock": {
-        "roles": ["diaspora_owner","veterinarian","herdsman","farm_manager","admin"],
-        "invite_prefixes": ["VP-DIA","VP-VET","VP-HRD","VP-FMG","VP-ADM"],
+        "roles": ["diaspora_owner","veterinarian","farm_manager","admin"],
+        "invite_prefixes": ["VP-DIA","VP-VET","VP-FMG","VP-ADM"],
         "badge_color": "#d97706", "badge_bg": "#1a0f00",
         "icon": "🐄", "description": "Diaspora animal health & biosecurity",
     },
@@ -250,17 +250,34 @@ if not st.session_state["authenticated"]:
                 unsafe_allow_html=True
             )
             st.markdown("<div class='section-header'>STEP 2 — YOUR DETAILS</div>", unsafe_allow_html=True)
+            # Filter out herdsman from registration — field role only
+            reg_roles = [r for r in mod_cfg["roles"] if r != "herdsman"]
+
             with st.form("register_form"):
                 col1, col2 = st.columns(2)
                 with col1:
                     full_name = st.text_input("Full Name *", placeholder="Joseph Memusi")
                     username  = st.text_input("Username *",  placeholder="josephm")
                 with col2:
-                    company  = st.text_input("Company *",   placeholder="VeriPath Africa")
-                    role     = st.selectbox("Role", mod_cfg["roles"])
-                invite_code = st.text_input("Invite Code *", placeholder=f"{mod_cfg['invite_prefixes'][0]}-XXXX")
-                password    = st.text_input("Password *",         type="password", placeholder="Min. 8 characters")
-                password2   = st.text_input("Confirm Password *", type="password", placeholder="Repeat password")
+                    role = st.selectbox("Role", reg_roles)
+                    # Farmers are individuals — no company
+                    is_farmer = role == "farmer"
+                    if is_farmer:
+                        company = full_name.strip() or "Individual"
+                        st.markdown(
+                            "<small style='color:#64748b'>Farmers register as individuals "
+                            "— no company needed.</small>",
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        company = st.text_input("Company *", placeholder="VeriPath Africa")
+
+                invite_code = st.text_input(
+                    "Invite Code *",
+                    placeholder=f"{mod_cfg['invite_prefixes'][0]}-XXXX"
+                )
+                password  = st.text_input("Password *",         type="password", placeholder="Min. 8 characters")
+                password2 = st.text_input("Confirm Password *", type="password", placeholder="Repeat password")
                 st.markdown("""
                 <div style='background:#0d1224;border:1px solid #1e3a5f;border-radius:8px;
                             padding:12px 16px;margin:8px 0;font-size:0.82rem;color:#94a3b8'>
@@ -272,15 +289,19 @@ if not st.session_state["authenticated"]:
                 """, unsafe_allow_html=True)
                 agree_tnc = st.checkbox("I have read and agree to the Terms & Conditions *")
                 submit    = st.form_submit_button("Create Account →", use_container_width=True)
+
             if submit:
+                # For farmers, company = their name
+                if role == "farmer":
+                    company = full_name.strip() or "Individual"
                 errors = []
-                if not full_name.strip():   errors.append("Full Name is required")
-                if not username.strip():    errors.append("Username is required")
-                if not company.strip():     errors.append("Company is required")
-                if not invite_code.strip(): errors.append("Invite code is required")
-                if not password:            errors.append("Password is required")
-                if password != password2:   errors.append("Passwords do not match")
-                if not agree_tnc:           errors.append("You must agree to the Terms & Conditions")
+                if not full_name.strip():              errors.append("Full Name is required")
+                if not username.strip():               errors.append("Username is required")
+                if not company.strip():                errors.append("Company is required")
+                if not invite_code.strip():            errors.append("Invite code is required")
+                if not password:                       errors.append("Password is required")
+                if password != password2:              errors.append("Passwords do not match")
+                if not agree_tnc:                      errors.append("You must agree to the Terms & Conditions")
                 if errors:
                     for e in errors: st.error(f"❌ {e}")
                 else:
