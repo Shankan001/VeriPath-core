@@ -207,10 +207,20 @@ ROLE_PAGES = {
         "🔧 Hardware Registry",
         "👥 My Team",
     ],
-    "herdsman": [
-        "📋 Daily Symptom Log",
-        "🐄 My Herd",
+    "admin_livestock": [
+        "📊 Farm Overview",
+        "🐄 Animal Registry",
         "🌡 Temperature Entry",
+        "📋 Daily Symptom Log",
+        "🧪 Disease Probability",
+        "🚨 Clinical Alerts",
+        "🌍 My Animals",
+        "🌡 Health Alerts",
+        "💰 My Earnings",
+        "🔧 Hardware Registry",
+        "🔑 Invite Codes",
+        "👥 My Team",
+        "🗑 Demo Reset",
     ],
     "diaspora_owner": [
         "🌍 My Animals",
@@ -636,6 +646,8 @@ elif page == "📈 KPI Dashboard":
 elif page == "📊 Farm Overview":
     render_admin_overview(profile)
 
+
+
 elif page == "🔑 Invite Codes":
     st.markdown("# 🔑 Invite Code Manager")
     st.markdown("<p style='color:#64748b'>Generate and track invite codes for new users</p>", unsafe_allow_html=True)
@@ -748,8 +760,7 @@ elif page == "🗺 Origin Map":
 elif page == "🐄 Animal Registry":
     render_animal_registry(profile)
 
-elif page == "📊 Farm Overview":
-    render_admin_overview(profile)
+
 
 elif page == "🔧 Hardware Registry":
     render_hardware_registry(profile)
