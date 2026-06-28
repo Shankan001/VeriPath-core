@@ -1,7 +1,7 @@
 import streamlit as st
 import urllib.parse
 from datetime import datetime, timezone
-from supabase_db import get_supabase_client
+from supabase_db import get_client
 
 # ── SQL (run once in Supabase):
 # CREATE TABLE IF NOT EXISTS alert_log (
@@ -25,7 +25,7 @@ from supabase_db import get_supabase_client
 # ALTER TABLE animals ADD COLUMN IF NOT EXISTS vet_name    TEXT;
 
 def _client():
-    return get_supabase_client()
+    return get_client()
 
 def _build_owner_message(animal: dict, temp: float | None,
                           trigger: str, extra: str = "") -> str:
