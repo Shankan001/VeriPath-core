@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date
-from supabase_db import get_supabase_client
+from supabase_db import get_client
 
 def _client():
-    return get_supabase_client()
+    return get_client()
 
 def _load(table: str, company: str, limit: int = 500) -> list[dict]:
     try:

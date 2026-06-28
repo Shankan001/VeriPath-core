@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timezone
-from supabase_db import get_supabase_client
+from supabase_db import get_client
 
 # ── Supabase table (run once in SQL editor):
 # CREATE TABLE IF NOT EXISTS disease_assessments (
@@ -23,7 +23,7 @@ from supabase_db import get_supabase_client
 # );
 
 def _client():
-    return get_supabase_client()
+    return get_client()
 
 # ── Disease definitions ────────────────────────────────────────────────────
 DISEASES = {

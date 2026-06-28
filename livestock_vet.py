@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timezone
-from supabase_db import get_supabase_client
+from supabase_db import get_client
 
 def _client():
-    return get_supabase_client()
+    return get_client()
 
 def load_alerts(company: str) -> list[dict]:
     try:

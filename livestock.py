@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
 from datetime import date, datetime, timezone
-from supabase_db import get_supabase_client
+from supabase_db import get_client
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 def _client():
-    return get_supabase_client()
+    return get_client()
 
 def _next_tag(company: str) -> str:
     """Generate next VP-LIV-XXXX tag for this company."""

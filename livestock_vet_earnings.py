@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timezone
-from supabase_db import get_supabase_client
+from supabase_db import get_client
 
 # ── SQL (run once in Supabase):
 # CREATE TABLE IF NOT EXISTS vet_consultations (
@@ -45,7 +45,7 @@ from supabase_db import get_supabase_client
 # );
 
 def _client():
-    return get_supabase_client()
+    return get_client()
 
 # ── Commission model ───────────────────────────────────────────────────────
 # Month 1–3 post referral: 15–20% of consult fee
