@@ -284,11 +284,21 @@ if not st.session_state["authenticated"]:
                     By registering, you agree to VeriPath Africa's
                     <a href='https://github.com/Shankan001/VeriPath-core/blob/main/docs/VeriPath_Terms_Conditions.pdf'
                        target='_blank' style='color:#38bdf8;text-decoration:underline'>
-                       Terms &amp; Conditions</a>.
+                       Terms &amp; Conditions</a>
+                    and confirm compliance with Kenya's
+                    <a href='https://www.odpc.go.ke/data-protection-act/'
+                       target='_blank' style='color:#38bdf8;text-decoration:underline'>
+                       Data Protection Act (ODPC)</a>.
+                    Your farm and farmer data is processed lawfully under your authority
+                    as the data controller.
                 </div>
                 """, unsafe_allow_html=True)
-                agree_tnc = st.checkbox("I have read and agree to the Terms & Conditions *")
-                submit    = st.form_submit_button("Create Account →", use_container_width=True)
+                agree_tnc  = st.checkbox("I have read and agree to the Terms & Conditions *")
+                agree_odpc = st.checkbox(
+                    "I confirm I have lawful authority over the farmer/farm data "
+                    "I will upload and comply with Kenya's Data Protection Act *"
+                )
+                submit = st.form_submit_button("Create Account →", use_container_width=True)
 
             if submit:
                 # For farmers, company = their name
@@ -302,6 +312,7 @@ if not st.session_state["authenticated"]:
                 if not password:                       errors.append("Password is required")
                 if password != password2:              errors.append("Passwords do not match")
                 if not agree_tnc:                      errors.append("You must agree to the Terms & Conditions")
+                if not agree_odpc:                     errors.append("You must confirm ODPC data protection compliance")
                 if errors:
                     for e in errors: st.error(f"❌ {e}")
                 else:
