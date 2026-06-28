@@ -58,8 +58,33 @@ section[data-testid="stSidebar"] .stRadio label:hover { color: #38bdf8; }
 .stWarning { background: #1c1400 !important; border-left: 4px solid #fbbf24 !important; }
 .stError   { background: #2d0a0a !important; border-left: 4px solid #f87171 !important; }
 .user-pill { background: #0f2233; border: 1px solid #1e3a5f; border-radius: 20px; padding: 8px 14px; font-size: 0.8rem; color: #38bdf8; font-family: 'Space Mono', monospace; margin-bottom: 8px; }
+.module-card { border-radius: 16px; padding: 24px 20px; text-align: center; cursor: pointer; transition: all 0.2s; margin-bottom: 8px; }
+.module-card-crops { background: #071a0f; border: 2px solid #16a34a; }
+.module-card-crops:hover { border-color: #4ade80; box-shadow: 0 0 20px rgba(22,163,74,0.2); }
+.module-card-live  { background: #1a0f00; border: 2px solid #d97706; }
+.module-card-live:hover  { border-color: #fbbf24; box-shadow: 0 0 20px rgba(217,119,6,0.2); }
 </style>
 """, unsafe_allow_html=True)
+
+# ── Module → Role mapping ──────────────────────────────────────────────────
+MODULE_ROLES = {
+    "🌿 VeriPath Crops": {
+        "roles": ["record_keeper", "agronomist", "compliance_officer", "exporter", "admin"],
+        "invite_prefixes": ["VP-REC", "VP-AGR", "VP-COM", "VP-EXP", "VP-ADM"],
+        "badge_color": "#16a34a",
+        "badge_bg": "#071a0f",
+        "icon": "🌿",
+        "description": "Export compliance & EUDR traceability",
+    },
+    "🐄 VeriPath Livestock": {
+        "roles": ["diaspora_owner", "veterinarian", "herdsman", "farm_manager", "admin"],
+        "invite_prefixes": ["VP-DIA", "VP-VET", "VP-HRD", "VP-FMG", "VP-ADM"],
+        "badge_color": "#d97706",
+        "badge_bg": "#1a0f00",
+        "icon": "🐄",
+        "description": "Diaspora animal health & biosecurity",
+    },
+}
 
 HS_CODE_MAP = {
     "Maize": "1005.90", "Coffee": "0901.11", "Tea": "0902.30",
@@ -154,10 +179,58 @@ ROLE_PAGES = {
         "👥 My Team",
         "🗑 Demo Reset",
     ],
+    # ── Livestock roles ────────────────────────────────────────────────────
+    "diaspora_owner": [
+        "🐄 My Animals",
+        "🌡 Health Alerts",
+        "📋 Vet Reports",
+        "💳 Payments & Commissions",
+    ],
+    "veterinarian": [
+        "🚨 Clinical Alerts",
+        "🐄 Animal Registry",
+        "📋 Patient History",
+        "🧪 Disease Probability",
+        "💰 My Earnings",
+    ],
+    "herdsman": [
+        "📋 Daily Symptom Log",
+        "🐄 My Herd",
+        "🌡 Temperature Entry",
+    ],
+    "farm_manager": [
+        "📊 Farm Overview",
+        "🐄 Animal Registry",
+        "🌡 Temperature Entry",
+        "📋 Daily Symptom Log",
+        "🌡 Health Monitoring",
+        "🔧 Hardware Registry",
+        "👥 My Team",
+    ],
+    "herdsman": [
+        "📋 Daily Symptom Log",
+        "🐄 My Herd",
+        "🌡 Temperature Entry",
+    ],
+    "diaspora_owner": [
+        "🌍 My Animals",
+        "🌡 Health Alerts",
+        "📋 Vet Reports",
+        "💳 Payments & Commissions",
+    ],
+    "veterinarian": [
+        "🚨 Clinical Alerts",
+        "🐄 Animal Registry",
+        "📋 Patient History",
+        "🧪 Disease Probability",
+        "📋 Daily Symptom Log",
+        "💰 My Earnings",
+        "🔧 Hardware Registry",
+    ],
 }
 
 # ── Auth state ─────────────────────────────────────────────────────────────
-for key, val in [("authenticated",False),("user_profile",None),("auth_page","login")]:
+for key, val in [("authenticated",False),("user_profile",None),("auth_page","login"),("reg_module",None)]:
     if key not in st.session_state:
         st.session_state[key] = val
 
@@ -165,16 +238,18 @@ for key, val in [("authenticated",False),("user_profile",None),("auth_page","log
 if not st.session_state["authenticated"]:
     st.markdown("<div style='text-align:center;margin-top:60px'>", unsafe_allow_html=True)
     st.markdown("<div class='auth-logo'>▸ VERIPATH AFRICA</div>", unsafe_allow_html=True)
-    st.markdown("<div class='auth-tagline'>Kenya Export Compliance Infrastructure</div>", unsafe_allow_html=True)
+    st.markdown("<div class='auth-tagline'>Kenya Agricultural Intelligence Infrastructure</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("---")
     col_l, col_r = st.columns(2)
     with col_l:
         if st.button("🔑 Sign In", use_container_width=True):
             st.session_state["auth_page"] = "login"
+            st.rerun()
     with col_r:
         if st.button("📝 Register", use_container_width=True):
             st.session_state["auth_page"] = "register"
+            st.rerun()
     st.markdown("---")
 
     if st.session_state["auth_page"] == "login":
@@ -196,51 +271,114 @@ if not st.session_state["authenticated"]:
                 else:
                     st.error(f"❌ {msg}")
         st.markdown("<br><small style='color:#64748b'>No account? Click Register above.</small>", unsafe_allow_html=True)
+
     else:
         st.markdown("### Create Your Account")
-        with st.form("register_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                full_name = st.text_input("Full Name *", placeholder="Joseph Memusi")
-                username  = st.text_input("Username *",  placeholder="josephm")
-            with col2:
-                company  = st.text_input("Company *",   placeholder="VeriPath Africa")
-                role     = st.selectbox("Role", ["record_keeper","agronomist","compliance_officer","exporter","admin"])
-            invite_code = st.text_input("Invite Code *", placeholder="VP-EXP-XXXX")
-            password  = st.text_input("Password *",         type="password", placeholder="Min. 8 characters")
-            password2 = st.text_input("Confirm Password *", type="password", placeholder="Repeat password")
+
+        # ── Step 1: Module selection ───────────────────────────────────────
+        st.markdown("<div class='section-header'>STEP 1 — CHOOSE YOUR MODULE</div>", unsafe_allow_html=True)
+        col_m1, col_m2 = st.columns(2)
+        with col_m1:
             st.markdown("""
-            <div style='background:#0d1224;border:1px solid #1e3a5f;border-radius:8px;
-                        padding:12px 16px;margin:8px 0;font-size:0.82rem;color:#94a3b8'>
-                By registering, you agree to VeriPath Africa's
-                <a href='https://github.com/Shankan001/VeriPath-core/blob/main/docs/VeriPath_Terms_Conditions.pdf'
-                   target='_blank' style='color:#38bdf8;text-decoration:underline'>
-                   Terms &amp; Conditions
-                </a>.
+            <div class='module-card module-card-crops'>
+                <div style='font-size:2rem'>🌿</div>
+                <div style='font-family:Space Mono,monospace;font-size:0.9rem;color:#4ade80;margin:8px 0'>VERIPATH CROPS</div>
+                <div style='font-size:0.78rem;color:#94a3b8'>Export compliance & EUDR traceability</div>
             </div>
             """, unsafe_allow_html=True)
-            agree_tnc = st.checkbox("I have read and agree to the Terms & Conditions *")
-            submit    = st.form_submit_button("Create Account →", use_container_width=True)
-        if submit:
-            errors = []
-            if not full_name.strip():   errors.append("Full Name is required")
-            if not username.strip():    errors.append("Username is required")
-            if not company.strip():     errors.append("Company is required")
-            if not invite_code.strip(): errors.append("Invite code is required")
-            if not password:            errors.append("Password is required")
-            if password != password2:   errors.append("Passwords do not match")
-            if not agree_tnc:           errors.append("You must agree to the Terms & Conditions")
-            if errors:
-                for e in errors: st.error(f"❌ {e}")
-            else:
-                ok, msg = register_user(username, password, full_name, company, role, invite_code)
-                if ok:
-                    st.success(f"✅ {msg} You can now sign in.")
-                    st.session_state["auth_page"] = "login"
-                    st.rerun()
+            if st.button("Select Crops Module", use_container_width=True, key="btn_crops"):
+                st.session_state["reg_module"] = "🌿 VeriPath Crops"
+                st.rerun()
+        with col_m2:
+            st.markdown("""
+            <div class='module-card module-card-live'>
+                <div style='font-size:2rem'>🐄</div>
+                <div style='font-family:Space Mono,monospace;font-size:0.9rem;color:#fbbf24;margin:8px 0'>VERIPATH LIVESTOCK</div>
+                <div style='font-size:0.78rem;color:#94a3b8'>Diaspora animal health & biosecurity</div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("Select Livestock Module", use_container_width=True, key="btn_live"):
+                st.session_state["reg_module"] = "🐄 VeriPath Livestock"
+                st.rerun()
+
+        selected_module = st.session_state.get("reg_module", None)
+
+        if selected_module:
+            mod_cfg = MODULE_ROLES[selected_module]
+            badge_style = (
+                f"background:{mod_cfg['badge_bg']};border:1px solid {mod_cfg['badge_color']};"
+                f"border-radius:20px;padding:4px 16px;font-size:0.8rem;color:{mod_cfg['badge_color']};"
+                f"font-family:'Space Mono',monospace;display:inline-block;margin:12px 0 20px 0"
+            )
+            st.markdown(f"<span style='{badge_style}'>✓ {selected_module} selected</span>", unsafe_allow_html=True)
+            st.markdown("<div class='section-header'>STEP 2 — YOUR DETAILS</div>", unsafe_allow_html=True)
+
+            with st.form("register_form"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    full_name = st.text_input("Full Name *", placeholder="Joseph Memusi")
+                    username  = st.text_input("Username *",  placeholder="josephm")
+                with col2:
+                    company  = st.text_input("Company *",   placeholder="VeriPath Africa")
+                    role     = st.selectbox("Role", mod_cfg["roles"])
+                invite_code = st.text_input(
+                    "Invite Code *",
+                    placeholder=f"{mod_cfg['invite_prefixes'][0]}-XXXX"
+                )
+                password    = st.text_input("Password *",         type="password", placeholder="Min. 8 characters")
+                password2   = st.text_input("Confirm Password *", type="password", placeholder="Repeat password")
+                st.markdown("""
+                <div style='background:#0d1224;border:1px solid #1e3a5f;border-radius:8px;
+                            padding:12px 16px;margin:8px 0;font-size:0.82rem;color:#94a3b8'>
+                    By registering, you agree to VeriPath Africa's
+                    <a href='https://github.com/Shankan001/VeriPath-core/blob/main/docs/VeriPath_Terms_Conditions.pdf'
+                       target='_blank' style='color:#38bdf8;text-decoration:underline'>
+                       Terms &amp; Conditions
+                    </a>.
+                </div>
+                """, unsafe_allow_html=True)
+                agree_tnc = st.checkbox("I have read and agree to the Terms & Conditions *")
+                submit    = st.form_submit_button("Create Account →", use_container_width=True)
+
+            if submit:
+                errors = []
+                if not full_name.strip():   errors.append("Full Name is required")
+                if not username.strip():    errors.append("Username is required")
+                if not company.strip():     errors.append("Company is required")
+                if not invite_code.strip(): errors.append("Invite code is required")
+                if not password:            errors.append("Password is required")
+                if password != password2:   errors.append("Passwords do not match")
+                if not agree_tnc:           errors.append("You must agree to the Terms & Conditions")
+                if errors:
+                    for e in errors: st.error(f"❌ {e}")
                 else:
-                    st.error(f"❌ {msg}")
-        st.markdown("<br><small style='color:#64748b'>Already have an account? Click Sign In above.</small>", unsafe_allow_html=True)
+                    ok, msg = register_user(
+                        username, password, full_name, company,
+                        role, invite_code, module=selected_module
+                    )
+                    if ok:
+                        st.success(f"✅ {msg} You can now sign in.")
+                        st.session_state.pop("reg_module", None)
+                        st.session_state["auth_page"] = "login"
+                        st.rerun()
+                    else:
+                        st.error(f"❌ {msg}")
+        else:
+            st.markdown("""
+            <div style='background:#0d1224;border:1px dashed #1e3a5f;border-radius:12px;
+                        padding:32px;text-align:center;margin-top:16px'>
+                <div style='font-size:1.5rem'>👆</div>
+                <div style='color:#64748b;margin-top:8px;font-size:0.9rem'>
+                    Select a module above to continue
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        if st.button("← Back to Sign In", key="back_to_login"):
+            st.session_state["auth_page"] = "login"
+            st.session_state.pop("reg_module", None)
+            st.rerun()
+
     st.stop()
 
 # ── Ledger state ───────────────────────────────────────────────────────────
@@ -264,6 +402,7 @@ def get_hs_code(crop):
 # ── Sidebar ────────────────────────────────────────────────────────────────
 profile = st.session_state["user_profile"]
 role    = profile.get("role","record_keeper")
+module  = profile.get("module","🌿 VeriPath Crops")
 pages   = ROLE_PAGES.get(role, ["📦 Packhouse Intake"])
 
 st.sidebar.markdown("## 🏗 VeriPath Enterprise")
@@ -272,6 +411,17 @@ st.sidebar.markdown(
     f"<span style='color:#64748b;font-size:0.7rem'>{profile['company']} · {role}</span></div>",
     unsafe_allow_html=True
 )
+
+# Module badge in sidebar
+_mod_cfg = MODULE_ROLES.get(module, MODULE_ROLES["🌿 VeriPath Crops"])
+st.sidebar.markdown(
+    f"<div style='background:{_mod_cfg['badge_bg']};border:1px solid {_mod_cfg['badge_color']};"
+    f"border-radius:10px;padding:5px 12px;font-size:0.72rem;color:{_mod_cfg['badge_color']};"
+    f"font-family:Space Mono,monospace;margin-bottom:8px;text-align:center'>"
+    f"{module}</div>",
+    unsafe_allow_html=True
+)
+
 st.sidebar.markdown("---")
 page = st.sidebar.radio("", pages)
 st.sidebar.markdown("---")
@@ -284,7 +434,7 @@ render_container_tracker(profile["username"])
 
 if st.sidebar.button("🚪 Sign Out", use_container_width=True):
     for k in ["authenticated","user_profile","auth_page","audit_result",
-              "batch_approved","intake_rows","ingestion_entries"]:
+              "batch_approved","intake_rows","ingestion_entries","reg_module"]:
         st.session_state.pop(k, None)
     st.rerun()
 
@@ -461,6 +611,9 @@ elif page == "🌱 Carbon Tracking":
 elif page == "📈 KPI Dashboard":
     render_kpi_dashboard(profile)
 
+elif page == "📊 Farm Overview":
+    render_admin_overview(profile)
+
 elif page == "🔑 Invite Codes":
     st.markdown("# 🔑 Invite Code Manager")
     st.markdown("<p style='color:#64748b'>Generate and track invite codes for new users</p>", unsafe_allow_html=True)
@@ -469,9 +622,19 @@ elif page == "🔑 Invite Codes":
         st.stop()
     st.markdown("---")
     st.markdown("### Generate New Code")
-    col_r, col_g = st.columns([2,1])
+    col_m, col_r, col_g = st.columns([2,2,1])
+    with col_m:
+        from invite_codes import MODULE_ROLE_MAP
+        mod_filter = st.selectbox(
+            "Module",
+            ["All"] + list(MODULE_ROLE_MAP.keys())
+        )
     with col_r:
-        new_role = st.selectbox("Role", list(ROLE_PREFIXES.keys()))
+        if mod_filter == "All":
+            role_options = list(ROLE_PREFIXES.keys())
+        else:
+            role_options = MODULE_ROLE_MAP[mod_filter]
+        new_role = st.selectbox("Role", role_options)
     with col_g:
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("⚡ Generate Code", use_container_width=True, type="primary"):
@@ -504,7 +667,7 @@ elif page == "🗑 Demo Reset":
     st.markdown(f"""
     <div style='background:#1a0a0a;border:2px solid #dc2626;border-radius:12px;
                 padding:20px 24px;margin-bottom:20px'>
-        <div style='font-size:1rem;font-weight:700;color:#f87171'>⚠️ DANGER ZONE</div>
+        <div style='font-size:1rem;font-weight:700;color:#f87171'>⚠ DANGER ZONE</div>
         <div style='color:#94a3b8;margin-top:6px;font-size:0.9rem'>
             This will permanently delete all consignment and ledger records for
             <b style='color:#e8eaf0'>{company}</b>.<br>
@@ -558,3 +721,60 @@ elif page == "🗺 Origin Map":
     else:
         st.info("No data yet.")
         st.map(pd.DataFrame({"lat":[-0.0236],"lon":[37.9062]}), zoom=5)
+
+# ── Livestock page routing ─────────────────────────────────────────────────
+elif page == "🐄 Animal Registry":
+    render_animal_registry(profile)
+
+elif page == "📊 Farm Overview":
+    render_admin_overview(profile)
+
+elif page == "🔧 Hardware Registry":
+    render_hardware_registry(profile)
+
+elif page == "💰 My Earnings":
+    render_vet_earnings(profile)
+
+elif page == "🌡 Health Alerts":
+    render_alert_centre(profile)
+
+elif page == "🌍 My Animals":
+    render_diaspora_dashboard(profile)
+
+elif page == "🚨 Clinical Alerts":
+    render_vet_dashboard(profile)
+
+elif page == "📋 Patient History":
+    render_vet_dashboard(profile)
+
+elif page == "📋 Daily Symptom Log":
+    render_symptom_log(profile)
+
+elif page == "🧪 Disease Probability":
+    render_disease_engine(profile)
+
+elif page == "🌡 Temperature Entry":
+    render_temp_monitoring(profile)
+
+elif page == "🐄 My Herd":
+    render_animal_registry(profile)
+
+elif page == "🌡 Health Monitoring":
+    render_temp_monitoring(profile)
+
+elif page == "📋 Daily Reports":
+    render_symptom_log(profile)
+
+elif page == "📋 Vet Reports":
+    st.markdown("# 📋 Vet Reports")
+    render_vet_dashboard(profile)
+
+elif page == "💳 Payments & Commissions":
+    render_vet_earnings(profile)
+
+elif page == "🔧 Hardware Registry":
+    render_hardware_registry(profile)
+
+elif page == "📸 Farm Activities":
+    st.markdown("# 📸 Farm Activities")
+    st.info("Farmer mobile view — coming soon.")
