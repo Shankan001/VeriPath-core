@@ -16,7 +16,17 @@ from pre_audit       import render_pre_audit_page
 from data_ingestion  import render_data_ingestion_page
 from trial           import render_trial_banner, render_container_tracker
 from kpi_dashboard   import render_kpi_dashboard
-from invite_codes    import generate_invite_code, list_invite_codes, ROLE_PREFIXES
+from invite_codes    import generate_invite_code, list_invite_codes, ROLE_PREFIXES, MODULE_ROLE_MAP
+from livestock          import render_animal_registry
+from livestock_health   import render_temp_monitoring
+from livestock_disease  import render_disease_engine
+from livestock_symptoms import render_symptom_log
+from livestock_vet      import render_vet_dashboard
+from livestock_diaspora import render_diaspora_dashboard
+from livestock_alerts   import render_alert_centre
+from livestock_vet_earnings import render_vet_earnings
+from livestock_hardware import render_hardware_registry
+from livestock_admin    import render_admin_overview
 
 load_dotenv()
 from data_init import ensure_data_files
@@ -58,39 +68,32 @@ section[data-testid="stSidebar"] .stRadio label:hover { color: #38bdf8; }
 .stWarning { background: #1c1400 !important; border-left: 4px solid #fbbf24 !important; }
 .stError   { background: #2d0a0a !important; border-left: 4px solid #f87171 !important; }
 .user-pill { background: #0f2233; border: 1px solid #1e3a5f; border-radius: 20px; padding: 8px 14px; font-size: 0.8rem; color: #38bdf8; font-family: 'Space Mono', monospace; margin-bottom: 8px; }
-.module-card { border-radius: 16px; padding: 24px 20px; text-align: center; cursor: pointer; transition: all 0.2s; margin-bottom: 8px; }
+.module-card { border-radius: 16px; padding: 24px 20px; text-align: center; margin-bottom: 8px; }
 .module-card-crops { background: #071a0f; border: 2px solid #16a34a; }
-.module-card-crops:hover { border-color: #4ade80; box-shadow: 0 0 20px rgba(22,163,74,0.2); }
 .module-card-live  { background: #1a0f00; border: 2px solid #d97706; }
-.module-card-live:hover  { border-color: #fbbf24; box-shadow: 0 0 20px rgba(217,119,6,0.2); }
 </style>
 """, unsafe_allow_html=True)
 
 # ── Module → Role mapping ──────────────────────────────────────────────────
 MODULE_ROLES = {
     "🌿 VeriPath Crops": {
-        "roles": ["record_keeper", "agronomist", "compliance_officer", "exporter", "admin"],
-        "invite_prefixes": ["VP-REC", "VP-AGR", "VP-COM", "VP-EXP", "VP-ADM"],
-        "badge_color": "#16a34a",
-        "badge_bg": "#071a0f",
-        "icon": "🌿",
-        "description": "Export compliance & EUDR traceability",
+        "roles": ["record_keeper","agronomist","compliance_officer","exporter","admin"],
+        "invite_prefixes": ["VP-REC","VP-AGR","VP-COM","VP-EXP","VP-ADM"],
+        "badge_color": "#16a34a", "badge_bg": "#071a0f",
+        "icon": "🌿", "description": "Export compliance & EUDR traceability",
     },
     "🐄 VeriPath Livestock": {
-        "roles": ["diaspora_owner", "veterinarian", "herdsman", "farm_manager", "admin"],
-        "invite_prefixes": ["VP-DIA", "VP-VET", "VP-HRD", "VP-FMG", "VP-ADM"],
-        "badge_color": "#d97706",
-        "badge_bg": "#1a0f00",
-        "icon": "🐄",
-        "description": "Diaspora animal health & biosecurity",
+        "roles": ["diaspora_owner","veterinarian","herdsman","farm_manager","admin"],
+        "invite_prefixes": ["VP-DIA","VP-VET","VP-HRD","VP-FMG","VP-ADM"],
+        "badge_color": "#d97706", "badge_bg": "#1a0f00",
+        "icon": "🐄", "description": "Diaspora animal health & biosecurity",
     },
 }
 
 HS_CODE_MAP = {
-    "Maize": "1005.90", "Coffee": "0901.11", "Tea": "0902.30",
-    "Avocado": "0804.40", "French Beans": "0708.20", "Roses": "0603.11",
-    "Macadamia Nuts": "0802.62", "Mango": "0804.50",
-    "Pineapple": "0804.30", "Passion Fruit": "0810.90",
+    "Maize":"1005.90","Coffee":"0901.11","Tea":"0902.30","Avocado":"0804.40",
+    "French Beans":"0708.20","Roses":"0603.11","Macadamia Nuts":"0802.62",
+    "Mango":"0804.50","Pineapple":"0804.30","Passion Fruit":"0810.90",
 }
 KENYAN_COUNTIES = [
     "Baringo","Bomet","Bungoma","Busia","Elgeyo-Marakwet","Embu","Garissa",
@@ -102,16 +105,16 @@ KENYAN_COUNTIES = [
     "Turkana","Uasin Gishu","Vihiga","Wajir","West Pokot"
 ]
 COUNTY_COORDS = {
-    "Nairobi": (-1.2921, 36.8219), "Mombasa": (-4.0435, 39.6682),
-    "Kisumu": (-0.1022, 34.7617),  "Nakuru":  (-0.3031, 36.0800),
-    "Kericho": (-0.3686, 35.2863), "Narok":  (-1.0836, 35.8716),
-    "Machakos":(-1.5177, 37.2634), "Meru":   (0.0467, 37.6490),
-    "Kakamega":(0.2827, 34.7519),  "Nyeri":  (-0.4167, 36.9500),
-    "Kiambu":  (-1.1714, 36.8353), "Murang'a":(-0.7167, 37.1500),
-    "Embu":    (-0.5333, 37.4500), "Kirinyaga":(-0.5594, 37.3347),
-    "Nandi":   (0.1833, 35.1167),  "Uasin Gishu":(0.5500, 35.2667),
-    "Trans Nzoia":(1.0167, 34.9500),"Bungoma":(0.5635, 34.5606),
-    "Kilifi":  (-3.6305, 39.8499), "Kwale":  (-4.1740, 39.4520),
+    "Nairobi":(-1.2921,36.8219),"Mombasa":(-4.0435,39.6682),
+    "Kisumu":(-0.1022,34.7617),"Nakuru":(-0.3031,36.0800),
+    "Kericho":(-0.3686,35.2863),"Narok":(-1.0836,35.8716),
+    "Machakos":(-1.5177,37.2634),"Meru":(0.0467,37.6490),
+    "Kakamega":(0.2827,34.7519),"Nyeri":(-0.4167,36.9500),
+    "Kiambu":(-1.1714,36.8353),"Murang'a":(-0.7167,37.1500),
+    "Embu":(-0.5333,37.4500),"Kirinyaga":(-0.5594,37.3347),
+    "Nandi":(0.1833,35.1167),"Uasin Gishu":(0.5500,35.2667),
+    "Trans Nzoia":(1.0167,34.9500),"Bungoma":(0.5635,34.5606),
+    "Kilifi":(-3.6305,39.8499),"Kwale":(-4.1740,39.4520),
 }
 LEDGER_COLS = [
     'Consignment_ID','Timestamp','Farmer_Name','Crop_Type',
@@ -122,120 +125,44 @@ KRA_PIN_PATTERN = re.compile(r'^[A-Z]\d{9}[A-Z]$')
 
 # ── Role → Pages ───────────────────────────────────────────────────────────
 ROLE_PAGES = {
-    "farmer": [
-        "📸 Farm Activities",
-        "📦 My Batches",
-        "💰 Payments",
-        "🌿 My Farm Profile",
-    ],
-    "record_keeper": [
-        "🌿 Outgrower Registry",
-        "📦 Packhouse Intake",
-        "📥 Data Ingestion",
-        "👥 My Team",
-    ],
-    "agronomist": [
-        "🌿 Outgrower Registry",
-        "📦 Packhouse Intake",
-    ],
+    "farmer": ["📸 Farm Activities","📦 My Batches","💰 Payments","🌿 My Farm Profile"],
+    "record_keeper": ["🌿 Outgrower Registry","📦 Packhouse Intake","📥 Data Ingestion","👥 My Team"],
+    "agronomist": ["🌿 Outgrower Registry","📦 Packhouse Intake"],
     "compliance_officer": [
-        "📥 Data Ingestion",
-        "📅 Daily Batch Reports",
-        "🔍 Pre-Audit Gate",
-        "🌍 EUDR Risk Scorer",
-        "📄 Compliance PDF",
+        "📥 Data Ingestion","📅 Daily Batch Reports",
+        "🔍 Pre-Audit Gate","🌍 EUDR Risk Scorer","📄 Compliance PDF",
     ],
     "exporter": [
-        "📊 Dashboard",
-        "📥 Data Ingestion",
-        "📑 Consignment Ledger",
-        "🌿 Outgrower Registry",
-        "📦 Packhouse Intake",
-        "📅 Daily Batch Reports",
-        "🔍 Pre-Audit Gate",
-        "🌍 EUDR Risk Scorer",
-        "📄 Compliance PDF",
-        "📡 Transmit to Portals",
-        "🌱 Carbon Tracking",
-        "🗺 Origin Map",
-        "👥 My Team",
-        "🗑 Demo Reset",
+        "📊 Dashboard","📥 Data Ingestion","📑 Consignment Ledger",
+        "🌿 Outgrower Registry","📦 Packhouse Intake","📅 Daily Batch Reports",
+        "🔍 Pre-Audit Gate","🌍 EUDR Risk Scorer","📄 Compliance PDF",
+        "📡 Transmit to Portals","🌱 Carbon Tracking","🗺 Origin Map",
+        "👥 My Team","🗑 Demo Reset",
     ],
     "admin": [
-        "📊 Dashboard",
-        "📥 Data Ingestion",
-        "📑 Consignment Ledger",
-        "🌿 Outgrower Registry",
-        "📦 Packhouse Intake",
-        "📅 Daily Batch Reports",
-        "🔍 Pre-Audit Gate",
-        "🌍 EUDR Risk Scorer",
-        "📄 Compliance PDF",
-        "📡 Transmit to Portals",
-        "🌱 Carbon Tracking",
-        "🗺 Origin Map",
-        "📈 KPI Dashboard",
-        "🔑 Invite Codes",
-        "👥 My Team",
-        "🗑 Demo Reset",
-    ],
-    # ── Livestock roles ────────────────────────────────────────────────────
-    "diaspora_owner": [
-        "🐄 My Animals",
-        "🌡 Health Alerts",
-        "📋 Vet Reports",
-        "💳 Payments & Commissions",
-    ],
-    "veterinarian": [
-        "🚨 Clinical Alerts",
-        "🐄 Animal Registry",
-        "📋 Patient History",
-        "🧪 Disease Probability",
-        "💰 My Earnings",
-    ],
-    "herdsman": [
-        "📋 Daily Symptom Log",
-        "🐄 My Herd",
-        "🌡 Temperature Entry",
-    ],
-    "farm_manager": [
-        "📊 Farm Overview",
-        "🐄 Animal Registry",
-        "🌡 Temperature Entry",
-        "📋 Daily Symptom Log",
-        "🌡 Health Monitoring",
-        "🔧 Hardware Registry",
-        "👥 My Team",
+        "📊 Dashboard","📥 Data Ingestion","📑 Consignment Ledger",
+        "🌿 Outgrower Registry","📦 Packhouse Intake","📅 Daily Batch Reports",
+        "🔍 Pre-Audit Gate","🌍 EUDR Risk Scorer","📄 Compliance PDF",
+        "📡 Transmit to Portals","🌱 Carbon Tracking","🗺 Origin Map",
+        "📈 KPI Dashboard","🔑 Invite Codes","👥 My Team","🗑 Demo Reset",
     ],
     "admin_livestock": [
-        "📊 Farm Overview",
-        "🐄 Animal Registry",
-        "🌡 Temperature Entry",
-        "📋 Daily Symptom Log",
-        "🧪 Disease Probability",
-        "🚨 Clinical Alerts",
-        "🌍 My Animals",
-        "🌡 Health Alerts",
-        "💰 My Earnings",
-        "🔧 Hardware Registry",
-        "🔑 Invite Codes",
-        "👥 My Team",
-        "🗑 Demo Reset",
+        "📊 Farm Overview","🐄 Animal Registry","🌡 Temperature Entry",
+        "📋 Daily Symptom Log","🧪 Disease Probability","🚨 Clinical Alerts",
+        "🌍 My Animals","🌡 Health Alerts","💰 My Earnings",
+        "🔧 Hardware Registry","🔑 Invite Codes","👥 My Team","🗑 Demo Reset",
     ],
     "diaspora_owner": [
-        "🌍 My Animals",
-        "🌡 Health Alerts",
-        "📋 Vet Reports",
-        "💳 Payments & Commissions",
+        "🌍 My Animals","🌡 Health Alerts","📋 Vet Reports","💳 Payments & Commissions",
     ],
     "veterinarian": [
-        "🚨 Clinical Alerts",
-        "🐄 Animal Registry",
-        "📋 Patient History",
-        "🧪 Disease Probability",
-        "📋 Daily Symptom Log",
-        "💰 My Earnings",
-        "🔧 Hardware Registry",
+        "🚨 Clinical Alerts","🐄 Animal Registry","📋 Patient History",
+        "🧪 Disease Probability","📋 Daily Symptom Log","💰 My Earnings","🔧 Hardware Registry",
+    ],
+    "herdsman": ["📋 Daily Symptom Log","🐄 My Herd","🌡 Temperature Entry"],
+    "farm_manager": [
+        "📊 Farm Overview","🐄 Animal Registry","🌡 Temperature Entry",
+        "📋 Daily Symptom Log","🌡 Health Monitoring","🔧 Hardware Registry","👥 My Team",
     ],
 }
 
@@ -284,8 +211,6 @@ if not st.session_state["authenticated"]:
 
     else:
         st.markdown("### Create Your Account")
-
-        # ── Step 1: Module selection ───────────────────────────────────────
         st.markdown("<div class='section-header'>STEP 1 — CHOOSE YOUR MODULE</div>", unsafe_allow_html=True)
         col_m1, col_m2 = st.columns(2)
         with col_m1:
@@ -322,7 +247,6 @@ if not st.session_state["authenticated"]:
             )
             st.markdown(f"<span style='{badge_style}'>✓ {selected_module} selected</span>", unsafe_allow_html=True)
             st.markdown("<div class='section-header'>STEP 2 — YOUR DETAILS</div>", unsafe_allow_html=True)
-
             with st.form("register_form"):
                 col1, col2 = st.columns(2)
                 with col1:
@@ -331,10 +255,7 @@ if not st.session_state["authenticated"]:
                 with col2:
                     company  = st.text_input("Company *",   placeholder="VeriPath Africa")
                     role     = st.selectbox("Role", mod_cfg["roles"])
-                invite_code = st.text_input(
-                    "Invite Code *",
-                    placeholder=f"{mod_cfg['invite_prefixes'][0]}-XXXX"
-                )
+                invite_code = st.text_input("Invite Code *", placeholder=f"{mod_cfg['invite_prefixes'][0]}-XXXX")
                 password    = st.text_input("Password *",         type="password", placeholder="Min. 8 characters")
                 password2   = st.text_input("Confirm Password *", type="password", placeholder="Repeat password")
                 st.markdown("""
@@ -343,13 +264,11 @@ if not st.session_state["authenticated"]:
                     By registering, you agree to VeriPath Africa's
                     <a href='https://github.com/Shankan001/VeriPath-core/blob/main/docs/VeriPath_Terms_Conditions.pdf'
                        target='_blank' style='color:#38bdf8;text-decoration:underline'>
-                       Terms &amp; Conditions
-                    </a>.
+                       Terms &amp; Conditions</a>.
                 </div>
                 """, unsafe_allow_html=True)
                 agree_tnc = st.checkbox("I have read and agree to the Terms & Conditions *")
                 submit    = st.form_submit_button("Create Account →", use_container_width=True)
-
             if submit:
                 errors = []
                 if not full_name.strip():   errors.append("Full Name is required")
@@ -378,12 +297,9 @@ if not st.session_state["authenticated"]:
             <div style='background:#0d1224;border:1px dashed #1e3a5f;border-radius:12px;
                         padding:32px;text-align:center;margin-top:16px'>
                 <div style='font-size:1.5rem'>👆</div>
-                <div style='color:#64748b;margin-top:8px;font-size:0.9rem'>
-                    Select a module above to continue
-                </div>
+                <div style='color:#64748b;margin-top:8px;font-size:0.9rem'>Select a module above to continue</div>
             </div>
             """, unsafe_allow_html=True)
-
         if st.button("← Back to Sign In", key="back_to_login"):
             st.session_state["auth_page"] = "login"
             st.session_state.pop("reg_module", None)
@@ -414,14 +330,9 @@ profile = st.session_state["user_profile"]
 role    = profile.get("role","record_keeper")
 module  = profile.get("module") or (
     "🐄 VeriPath Livestock"
-    if profile.get("role") in ("diaspora_owner","veterinarian","herdsman","farm_manager")
+    if role in ("diaspora_owner","veterinarian","herdsman","farm_manager")
     else "🌿 VeriPath Crops"
 )
-# For admin — show pages based on their active module
-if role == "admin" and module == "🐄 VeriPath Livestock":
-    pages = ROLE_PAGES.get("admin_livestock", ["📊 Farm Overview"])
-else:
-    pages = ROLE_PAGES.get(role, ["📦 Packhouse Intake"])
 
 st.sidebar.markdown("## 🏗 VeriPath Enterprise")
 st.sidebar.markdown(
@@ -430,22 +341,20 @@ st.sidebar.markdown(
     unsafe_allow_html=True
 )
 
-# Module badge in sidebar
+# Module badge
 _mod_cfg = MODULE_ROLES.get(module, MODULE_ROLES["🌿 VeriPath Crops"])
 st.sidebar.markdown(
     f"<div style='background:{_mod_cfg['badge_bg']};border:1px solid {_mod_cfg['badge_color']};"
     f"border-radius:10px;padding:5px 12px;font-size:0.72rem;color:{_mod_cfg['badge_color']};"
-    f"font-family:Space Mono,monospace;margin-bottom:8px;text-align:center'>"
-    f"{module}</div>",
+    f"font-family:Space Mono,monospace;margin-bottom:8px;text-align:center'>{module}</div>",
     unsafe_allow_html=True
 )
 
-# Module switcher — admin and multi-module users only
+# Module switcher for admin
 if role == "admin":
-    st.sidebar.markdown("**Switch Module**")
     switched = st.sidebar.radio(
-        "Active module",
-        ["🌿 VeriPath Crops", "🐄 VeriPath Livestock"],
+        "Switch module",
+        ["🌿 VeriPath Crops","🐄 VeriPath Livestock"],
         index=0 if module == "🌿 VeriPath Crops" else 1,
         key="module_switcher"
     )
@@ -453,6 +362,12 @@ if role == "admin":
         st.session_state["user_profile"]["module"] = switched
         st.rerun()
     module = switched
+
+# Pages based on role + module
+if role == "admin" and module == "🐄 VeriPath Livestock":
+    pages = ROLE_PAGES["admin_livestock"]
+else:
+    pages = ROLE_PAGES.get(role, ["📦 Packhouse Intake"])
 
 st.sidebar.markdown("---")
 page = st.sidebar.radio("", pages)
@@ -480,10 +395,14 @@ def save_to_ledger(new_entries):
     st.session_state["ledger_data"] = merged
     save_consignments(merged.to_dict("records"))
 
-# ── Trial banner ──────────────────────────────────────────────────────────
-render_trial_banner(profile["username"], role=profile.get("role", "exporter"))
+# ── Trial banner ───────────────────────────────────────────────────────────
+render_trial_banner(profile["username"], role=profile.get("role","exporter"))
 
-# ── Page routing ───────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════
+# PAGE ROUTING
+# ══════════════════════════════════════════════════════════════════════════
+
+# ── CROPS PAGES ───────────────────────────────────────────────────────────
 if page == "📊 Dashboard":
     st.markdown("# 📊 VeriPath Dashboard")
     st.markdown("<p style='color:#64748b'>Real-time supply chain intelligence</p>", unsafe_allow_html=True)
@@ -544,9 +463,9 @@ elif page == "📑 Consignment Ledger":
         st.markdown("---")
         with st.expander("🔍 Filter"):
             fc1, fc2 = st.columns(2)
-            _crop_col = "crop" if "crop" in df.columns else "Crop_Type" if "Crop_Type" in df.columns else None
-            crop_filter   = fc1.multiselect("Crop",   options=df[_crop_col].unique().tolist() if _crop_col else [])
+            _crop_col   = "crop" if "crop" in df.columns else "Crop_Type" if "Crop_Type" in df.columns else None
             _county_col = "county" if "county" in df.columns else "Origin_County" if "Origin_County" in df.columns else None
+            crop_filter   = fc1.multiselect("Crop",   options=df[_crop_col].unique().tolist() if _crop_col else [])
             county_filter = fc2.multiselect("County", options=df[_county_col].unique().tolist() if _county_col else [])
         display_df = df.copy()
         if crop_filter and _crop_col:     display_df = display_df[display_df[_crop_col].isin(crop_filter)]
@@ -590,19 +509,15 @@ elif page == "📡 Transmit to Portals":
         </div>
         """, unsafe_allow_html=True)
     else:
-        mode        = get_bridge_mode()
-        cred_status = get_credential_status()
+        mode = get_bridge_mode()
         if mode == "simulation":
             st.markdown("<span class='mode-badge-sim'>⚙ SIMULATION MODE</span>", unsafe_allow_html=True)
         else:
             st.markdown("<span class='mode-badge-real'>🟢 LIVE MODE</span>", unsafe_allow_html=True)
         st.markdown("---")
         approved       = st.session_state.get("approved_records",[])
-        portal_options = st.multiselect(
-            "Target portals",
-            ["KenTrade","KEPHIS","AFA IMIS"],
-            default=["KenTrade","KEPHIS","AFA IMIS"]
-        )
+        portal_options = st.multiselect("Target portals",["KenTrade","KEPHIS","AFA IMIS"],
+                                        default=["KenTrade","KEPHIS","AFA IMIS"])
         st.markdown(f"**{len(approved)} approved records ready**")
         if approved and portal_options:
             if st.button(f"🚀 Submit {len(approved)} Records to {len(portal_options)} Portal(s)",
@@ -630,9 +545,9 @@ elif page == "📡 Transmit to Portals":
 elif page == "🌱 Carbon Tracking":
     st.markdown("# 🌱 Sustainability & Carbon Metrics")
     from supabase_db import load_ledger_db as _load_ledger_db
-    _company = profile.get("company", "")
+    _company = profile.get("company","")
     df = pd.DataFrame(_load_ledger_db(_company))
-    tw = df["weight_kg"].astype(float).sum() if not df.empty and "weight_kg" in df.columns else (df["Net_Weight_KG"].astype(float).sum() if not df.empty and "Net_Weight_KG" in df.columns else 0)
+    tw = df["weight_kg"].astype(float).sum() if not df.empty and "weight_kg" in df.columns else 0
     col1, col2, col3 = st.columns(3)
     col1.metric("Estimated Carbon Footprint", f"{round(tw*0.0021,3)} MT CO₂")
     col2.metric("Total Produce Tracked (KG)", f"{tw:,.0f}")
@@ -642,11 +557,6 @@ elif page == "🌱 Carbon Tracking":
 
 elif page == "📈 KPI Dashboard":
     render_kpi_dashboard(profile)
-
-elif page == "📊 Farm Overview":
-    render_admin_overview(profile)
-
-
 
 elif page == "🔑 Invite Codes":
     st.markdown("# 🔑 Invite Code Manager")
@@ -658,30 +568,21 @@ elif page == "🔑 Invite Codes":
     st.markdown("### Generate New Code")
     col_m, col_r, col_g = st.columns([2,2,1])
     with col_m:
-        from invite_codes import MODULE_ROLE_MAP
-        mod_filter = st.selectbox(
-            "Module",
-            ["All"] + list(MODULE_ROLE_MAP.keys())
-        )
+        mod_filter = st.selectbox("Module", ["All"] + list(MODULE_ROLE_MAP.keys()))
     with col_r:
-        if mod_filter == "All":
-            role_options = list(ROLE_PREFIXES.keys())
-        else:
-            role_options = MODULE_ROLE_MAP[mod_filter]
+        role_options = list(ROLE_PREFIXES.keys()) if mod_filter == "All" else MODULE_ROLE_MAP[mod_filter]
         new_role = st.selectbox("Role", role_options)
     with col_g:
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("⚡ Generate Code", use_container_width=True, type="primary"):
             code = generate_invite_code(new_role, created_by=profile["username"])
-            st.success(f"✅ New code generated:")
+            st.success("✅ New code generated:")
             st.code(code, language=None)
     st.markdown("---")
     st.markdown("### All Invite Codes")
-    import pandas as pd
     codes_list = list_invite_codes()
     if codes_list:
-        df_codes = pd.DataFrame(codes_list)
-        st.dataframe(df_codes, use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(codes_list), use_container_width=True, hide_index=True)
     else:
         st.info("No codes generated yet.")
 
@@ -691,8 +592,7 @@ elif page == "👥 My Team":
 
 elif page == "🗑 Demo Reset":
     st.markdown("# 🗑 Demo Reset")
-    st.markdown("<p style='color:#64748b'>Wipe your company data for a clean demo</p>",
-                unsafe_allow_html=True)
+    st.markdown("<p style='color:#64748b'>Wipe your company data for a clean demo</p>", unsafe_allow_html=True)
     if profile.get("role") not in ("exporter","admin","agronomist","record_keeper"):
         st.error("🔒 Access restricted.")
         st.stop()
@@ -718,7 +618,7 @@ elif page == "🗑 Demo Reset":
             n2 = clear_company_consignments(company)
             if "ledger_data" in st.session_state:
                 del st.session_state["ledger_data"]
-            st.success(f"✅ Deleted {n1} ledger records and {n2} consignment records for {company}. Ready for demo.")
+            st.success(f"✅ Deleted {n1} ledger + {n2} consignment records. Ready for demo.")
             st.rerun()
         else:
             st.error("❌ Company name does not match. No data deleted.")
@@ -726,14 +626,14 @@ elif page == "🗑 Demo Reset":
 elif page == "🗺 Origin Map":
     st.markdown("# 🗺 Produce Origin Map")
     from supabase_db import load_ledger_db as _load_ledger_db
-    _company = profile.get("company", "")
+    _company = profile.get("company","")
     df = pd.DataFrame(_load_ledger_db(_company))
     if not df.empty:
         import random
         map_data = []
         for _, row in df.iterrows():
             _c = row.get("county", row.get("Origin_County",""))
-            coords = COUNTY_COORDS.get(_c, (-0.0236, 37.9062))
+            coords = COUNTY_COORDS.get(_c,(-0.0236,37.9062))
             map_data.append({
                 "lat": coords[0] + random.uniform(-0.05,0.05),
                 "lon": coords[1] + random.uniform(-0.05,0.05)
@@ -748,31 +648,40 @@ elif page == "🗺 Origin Map":
                 Consignments=(_grp_id,"count"),
                 Total_Weight=(_grp_weight,"sum"),
             ).reset_index()
-        else:
-            county_summary = pd.DataFrame()
-        if not county_summary.empty:
-            st.dataframe(county_summary, use_container_width=True)
+            if not county_summary.empty:
+                st.dataframe(county_summary, use_container_width=True)
     else:
         st.info("No data yet.")
         st.map(pd.DataFrame({"lat":[-0.0236],"lon":[37.9062]}), zoom=5)
 
-# ── Livestock page routing ─────────────────────────────────────────────────
+elif page == "📸 Farm Activities":
+    st.markdown("# 📸 Farm Activities")
+    st.info("Farmer mobile view — coming soon.")
+
+# ── LIVESTOCK PAGES ────────────────────────────────────────────────────────
+elif page == "📊 Farm Overview":
+    render_admin_overview(profile)
+
 elif page == "🐄 Animal Registry":
     render_animal_registry(profile)
 
+elif page == "🐄 My Herd":
+    render_animal_registry(profile)
 
+elif page == "🌡 Temperature Entry":
+    render_temp_monitoring(profile)
 
-elif page == "🔧 Hardware Registry":
-    render_hardware_registry(profile)
+elif page == "🌡 Health Monitoring":
+    render_temp_monitoring(profile)
 
-elif page == "💰 My Earnings":
-    render_vet_earnings(profile)
+elif page == "📋 Daily Symptom Log":
+    render_symptom_log(profile)
 
-elif page == "🌡 Health Alerts":
-    render_alert_centre(profile)
+elif page == "📋 Daily Reports":
+    render_symptom_log(profile)
 
-elif page == "🌍 My Animals":
-    render_diaspora_dashboard(profile)
+elif page == "🧪 Disease Probability":
+    render_disease_engine(profile)
 
 elif page == "🚨 Clinical Alerts":
     render_vet_dashboard(profile)
@@ -780,34 +689,20 @@ elif page == "🚨 Clinical Alerts":
 elif page == "📋 Patient History":
     render_vet_dashboard(profile)
 
-elif page == "📋 Daily Symptom Log":
-    render_symptom_log(profile)
-
-elif page == "🧪 Disease Probability":
-    render_disease_engine(profile)
-
-elif page == "🌡 Temperature Entry":
-    render_temp_monitoring(profile)
-
-elif page == "🐄 My Herd":
-    render_animal_registry(profile)
-
-elif page == "🌡 Health Monitoring":
-    render_temp_monitoring(profile)
-
-elif page == "📋 Daily Reports":
-    render_symptom_log(profile)
-
 elif page == "📋 Vet Reports":
-    st.markdown("# 📋 Vet Reports")
     render_vet_dashboard(profile)
+
+elif page == "🌍 My Animals":
+    render_diaspora_dashboard(profile)
+
+elif page == "🌡 Health Alerts":
+    render_alert_centre(profile)
+
+elif page == "💰 My Earnings":
+    render_vet_earnings(profile)
 
 elif page == "💳 Payments & Commissions":
     render_vet_earnings(profile)
 
 elif page == "🔧 Hardware Registry":
     render_hardware_registry(profile)
-
-elif page == "📸 Farm Activities":
-    st.markdown("# 📸 Farm Activities")
-    st.info("Farmer mobile view — coming soon.")
