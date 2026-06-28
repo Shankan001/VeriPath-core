@@ -409,20 +409,7 @@ module  = profile.get("module") or (
 )
 # For admin — show pages based on their active module
 if role == "admin" and module == "🐄 VeriPath Livestock":
-    pages = [
-        "📊 Farm Overview",
-        "🐄 Animal Registry",
-        "🌡 Temperature Entry",
-        "📋 Daily Symptom Log",
-        "🧪 Disease Probability",
-        "🚨 Clinical Alerts",
-        "🌍 My Animals",
-        "🌡 Health Alerts",
-        "💰 My Earnings",
-        "🔧 Hardware Registry",
-        "🔑 Invite Codes",
-        "👥 My Team",
-    ]
+    pages = ROLE_PAGES.get("admin_livestock", ["📊 Farm Overview"])
 else:
     pages = ROLE_PAGES.get(role, ["📦 Packhouse Intake"])
 
