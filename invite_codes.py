@@ -7,15 +7,32 @@ from supabase_db import (
 )
 
 ROLE_PREFIXES = {
+    # ── Crops roles ────────────────────────────────────────────────────────
     "exporter":           "VP-EXP",
     "compliance_officer": "VP-COM",
     "record_keeper":      "VP-REC",
     "admin":              "VP-ADM",
     "agronomist":         "VP-AGR",
     "farmer":             "VP-FAR",
+    # ── Livestock roles ────────────────────────────────────────────────────
+    "diaspora_owner":     "VP-DIA",
+    "veterinarian":       "VP-VET",
+    "herdsman":           "VP-HRD",
+    "farm_manager":       "VP-FMG",
 }
 
 VALID_ROLES = list(ROLE_PREFIXES.keys())
+
+# Which roles belong to which module — used for UI grouping
+MODULE_ROLE_MAP = {
+    "🌿 VeriPath Crops": [
+        "exporter","compliance_officer","record_keeper",
+        "admin","agronomist","farmer",
+    ],
+    "🐄 VeriPath Livestock": [
+        "diaspora_owner","veterinarian","herdsman","farm_manager","admin",
+    ],
+}
 
 def generate_invite_code(role: str, created_by: str = "admin") -> str:
     if role not in ROLE_PREFIXES:
@@ -53,9 +70,15 @@ def list_invite_codes() -> list[dict]:
     codes  = load_invite_codes()
     result = []
     for code, meta in codes.items():
+        role   = meta.get("role","")
+        module = next(
+            (m for m, roles in MODULE_ROLE_MAP.items() if role in roles),
+            "—"
+        )
         result.append({
             "Code":       code,
-            "Role":       meta.get("role",""),
+            "Role":       role,
+            "Module":     module,
             "Created By": meta.get("created_by",""),
             "Created At": str(meta.get("created_at",""))[:10],
             "Used":       "✅ Yes" if meta.get("used") else "⏳ Unused",
