@@ -81,7 +81,7 @@ def render_admin_overview(profile: dict):
         _metric(c9,  "📡 COLLARS",      collars,  "#38bdf8")
         _metric(c10, "💊 BOLUSES",      boluses,  "#a78bfa")
         _metric(c11, "ASSIGNED UNITS",  assigned, "#4ade80")
-        _metric(c12, "VET PAYOUTS",
+        _metric(c12, "VET PAYOUTS (KES) 🇰🇪",
                 f"KES {total_consult_kes:,.0f}", "#fbbf24")
 
         if animals:
