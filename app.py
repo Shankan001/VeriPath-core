@@ -240,12 +240,15 @@ if not st.session_state["authenticated"]:
 
         if selected_module:
             mod_cfg = MODULE_ROLES[selected_module]
-            badge_style = (
-                f"background:{mod_cfg['badge_bg']};border:1px solid {mod_cfg['badge_color']};"
-                f"border-radius:20px;padding:4px 16px;font-size:0.8rem;color:{mod_cfg['badge_color']};"
-                f"font-family:'Space Mono',monospace;display:inline-block;margin:12px 0 20px 0"
+            bg    = mod_cfg['badge_bg']
+            color = mod_cfg['badge_color']
+            st.markdown(
+                f"<div style=\"background:{bg};border:1px solid {color};"
+                f"border-radius:20px;padding:4px 16px;font-size:0.8rem;color:{color};"
+                f"font-family:Space Mono,monospace;display:inline-block;margin:12px 0 20px 0\">"
+                f"✓ {selected_module} selected</div>",
+                unsafe_allow_html=True
             )
-            st.markdown(f"<span style='{badge_style}'>✓ {selected_module} selected</span>", unsafe_allow_html=True)
             st.markdown("<div class='section-header'>STEP 2 — YOUR DETAILS</div>", unsafe_allow_html=True)
             with st.form("register_form"):
                 col1, col2 = st.columns(2)
