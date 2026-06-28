@@ -5,3 +5,4 @@ __pycache__/
 .env
 .streamlit/
 data/
+firmware/config.h
