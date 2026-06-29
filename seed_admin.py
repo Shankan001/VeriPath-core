@@ -1,16 +1,48 @@
+"""
+VeriPath — Seed admin account
+Run once to create the first admin user.
+Usage: python3 seed_admin.py
+"""
 import os
-from supabase import create_client
+from dotenv import load_dotenv
+load_dotenv()
 
-url = os.environ.get("SUPABASE_URL")
-key = os.environ.get("SUPABASE_SERVICE_KEY")  # Use service key for seeding
-supabase = create_client(url, key)
+from auth import register_user
+from invite_codes import seed_admin_code
 
-# Insert VP-ADM invite code
-result = supabase.table("invite_codes").upsert({
-    "code": "VP-ADM-2024",
-    "role": "admin",
-    "used": False,
-    "company_id": None
-}).execute()
+def main():
+    print("\n🔑 VeriPath Admin Seeder")
+    print("=" * 40)
 
-print("Invite code seeded:", result.data)
+    # Generate admin invite code
+    code = seed_admin_code()
+    if not code:
+        print("❌ Could not generate admin code")
+        return
+
+    print(f"Admin invite code: {code}")
+    print()
+
+    username  = input("Admin username: ").strip()
+    full_name = input("Full name: ").strip()
+    company   = input("Company name: ").strip()
+    password  = input("Password (min 10 chars, uppercase, number, special): ").strip()
+
+    ok, msg = register_user(
+        username  = username,
+        password  = password,
+        full_name = full_name,
+        company   = company,
+        role      = "admin",
+        invite_code = code,
+        module    = "🌿 VeriPath Crops",
+    )
+    if ok:
+        print(f"\n✅ {msg}")
+        print(f"   Username: {username}")
+        print(f"   Role: admin")
+    else:
+        print(f"\n❌ {msg}")
+
+if __name__ == "__main__":
+    main()

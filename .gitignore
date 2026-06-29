@@ -6,3 +6,33 @@ __pycache__/
 .streamlit/
 data/
 firmware/config.h
+
+# ── Security ───────────────────────────────────────────────────
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.toml
+.streamlit/secrets.toml
+firmware/config.h
+*.env.*
+.env.local
+.env.production
+
+# ── Python ────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# ── Logs ──────────────────────────────────────────────────────
+*.log
+data/transmission_log.json
+data/users.json
+data/*.json
+
+# ── Data files — never commit ──────────────────────────────────
+data/*.csv
+data/*.log
+kakuzi_avocado_packing_list_2024.xlsx
+*.xlsx
