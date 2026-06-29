@@ -413,7 +413,7 @@ st.sidebar.markdown(
     unsafe_allow_html=True
 )
 st.sidebar.markdown("---")
-render_container_tracker(profile["username"], module="livestock" if "Livestock" in module else "crops")
+render_container_tracker(profile["username"], module="livestock" if "Livestock" in module else "crops", role=role)
 
 if st.sidebar.button("🚪 Sign Out", use_container_width=True):
     for k in ["authenticated","user_profile","auth_page","audit_result",
