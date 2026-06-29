@@ -275,11 +275,16 @@ def render_trial_banner(username: str, role: str = "exporter", module: str = Non
         """, unsafe_allow_html=True)
         _render_whatsapp_button(status["company_name"])
 
-def render_container_tracker(username: str, module: str = None):
+def render_container_tracker(username: str, module: str = None,
+                              role: str = None):
     import streamlit as st
+    if role == "admin":
+        return
     if module is None:
         module = _get_module(username)
-    status    = get_trial_status(username, module=module)
+    status = get_trial_status(username, module=module)
+    if status.get("tier") in ("admin","Admin"):
+        return
     used      = status["containers_used"]
     cap       = status["container_cap"]
     tier      = status["tier"]

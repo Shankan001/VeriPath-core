@@ -92,67 +92,66 @@ def _animal_card_diaspora(a: dict, latest_temp: dict | None,
     color, bg, label = _status_cfg(status)
     icon   = SPECIES_ICON.get(a.get("species",""), "🐾")
     age    = _age_display(a.get("birth_date",""))
+    tag    = a.get("animal_tag","—")
+    breed  = a.get("breed","—")
+    sex    = a.get("sex","—")
+    coat   = a.get("coat_color","—")
+    county = a.get("county","—")
+    farm   = a.get("farm_location","—")
 
     temp_line = ""
     if latest_temp:
-        t         = latest_temp.get("temp_celsius","—")
-        t_time    = latest_temp.get("recorded_at","")[:16].replace("T"," ")
-        t_tod     = latest_temp.get("time_of_day","")
-        temp_line = (f"<div style='color:#94a3b8;font-size:0.78rem;margin-top:4px'>"
-                     f"🌡 Last temp: <span style='color:#e8eaf0'>{t}°C</span> "
-                     f"· {t_tod} · {t_time}</div>")
+        t      = latest_temp.get("temp_celsius","—")
+        t_time = latest_temp.get("recorded_at","")[:16].replace("T"," ")
+        t_tod  = latest_temp.get("time_of_day","")
+        temp_line = (
+            "<div style=\"color:#94a3b8;font-size:0.78rem;margin-top:4px\">"
+            + f"🌡 Last temp: <span style=\"color:#e8eaf0\">{t}°C</span>"
+            + f" · {t_tod} · {t_time}</div>"
+        )
 
     sym_line = ""
     if latest_sym:
         sym_flag  = latest_sym.get("overall_flag","—")
         sym_date  = latest_sym.get("logged_at","")[:10]
-        sym_color = {"RED":"#dc2626","YELLOW":"#d97706","GREEN":"#16a34a"}.get(sym_flag,"#64748b")
-        sym_line  = (f"<div style='color:#94a3b8;font-size:0.78rem;margin-top:2px'>"
-                     f"📋 Last check: <span style='color:{sym_color}'>{sym_flag}</span>"
-                     f" · {sym_date}</div>")
+        sym_color = {"RED":"#dc2626","YELLOW":"#d97706",
+                     "GREEN":"#16a34a"}.get(sym_flag,"#64748b")
+        sym_line = (
+            "<div style=\"color:#94a3b8;font-size:0.78rem;margin-top:2px\">"
+            + f"📋 Last check: <span style=\"color:{sym_color}\">{sym_flag}</span>"
+            + f" · {sym_date}</div>"
+        )
 
     hw_line = ""
     if a.get("collar_id"):
-        hw_line += "<span style='color:#38bdf8;font-size:0.72rem'>📡 COLLAR </span>"
+        hw_line += "<span style=\"color:#38bdf8;font-size:0.72rem\">📡 COLLAR </span>"
     if a.get("bolus_id"):
-        hw_line += "<span style='color:#a78bfa;font-size:0.72rem'>💊 BOLUS</span>"
+        hw_line += "<span style=\"color:#a78bfa;font-size:0.72rem\">💊 BOLUS</span>"
     if hw_line:
-        hw_line = f"<div style='margin-top:6px'>{hw_line}</div>"
+        hw_line = "<div style=\"margin-top:6px\">" + hw_line + "</div>"
 
-    return f"""
-    <div style='background:{bg};border:2px solid {color};
-                border-radius:16px;padding:20px 22px;margin-bottom:16px'>
-        <div style='display:flex;justify-content:space-between;align-items:flex-start'>
-            <div style='flex:1'>
-                <div style='font-family:Space Mono,monospace;font-size:1.05rem;
-                            color:{color};font-weight:700'>
-                    {icon} {a.get("animal_tag","—")}
-                </div>
-                <div style='color:#e8eaf0;margin-top:6px;font-size:0.88rem'>
-                    {a.get("breed","—")} · {a.get("sex","—")} · {a.get("coat_color","—")}
-                </div>
-                <div style='color:#64748b;font-size:0.78rem;margin-top:2px'>
-                    {age} · {a.get("county","—")} · {a.get("farm_location","—")}
-                </div>
-                {temp_line}
-                {sym_line}
-                {hw_line}
-            </div>
-            <div style='text-align:center;min-width:80px'>
-                <div style='background:{bg};border:1px solid {color};
-                            border-radius:50%;width:60px;height:60px;
-                            display:flex;align-items:center;justify-content:center;
-                            font-size:1.5rem;margin:0 auto'>
-                    {icon}
-                </div>
-                <div style='font-family:Space Mono,monospace;color:{color};
-                            font-size:0.7rem;margin-top:6px;font-weight:700'>
-                    {label}
-                </div>
-            </div>
-        </div>
-    </div>
-    """
+    return (
+        "<div style=\"background:" + bg + ";border:2px solid " + color + ";"
+        "border-radius:16px;padding:20px 22px;margin-bottom:16px\">"
+        "<div style=\"display:flex;justify-content:space-between;align-items:flex-start\">"
+        "<div style=\"flex:1\">"
+        "<div style=\"font-family:Space Mono,monospace;font-size:1.05rem;"
+        "color:" + color + ";font-weight:700\">" + icon + " " + tag + "</div>"
+        "<div style=\"color:#e8eaf0;margin-top:6px;font-size:0.88rem\">"
+        + breed + " · " + sex + " · " + coat + "</div>"
+        "<div style=\"color:#64748b;font-size:0.78rem;margin-top:2px\">"
+        + age + " · " + county + " · " + farm + "</div>"
+        + temp_line + sym_line + hw_line
+        + "<div style=\"text-align:center;min-width:80px\">"
+        "<div style=\"background:" + bg + ";border:1px solid " + color + ";"
+        "border-radius:50%;width:60px;height:60px;"
+        "display:flex;align-items:center;justify-content:center;"
+        "font-size:1.5rem;margin:0 auto\">" + icon + "</div>"
+        "<div style=\"font-family:Space Mono,monospace;color:" + color + ";"
+        "font-size:0.7rem;margin-top:6px;font-weight:700\">" + label + "</div>"
+        "</div></div></div>"
+    )
+
 
 def render_diaspora_dashboard(profile: dict):
     company  = profile.get("company", "")
