@@ -126,7 +126,7 @@ KRA_PIN_PATTERN = re.compile(r'^[A-Z]\d{9}[A-Z]$')
 # ── Role → Pages ───────────────────────────────────────────────────────────
 ROLE_PAGES = {
     "farmer": ["📸 Farm Activities","📦 My Batches","💰 Payments","🌿 My Farm Profile"],
-    "record_keeper": ["🌿 Outgrower Registry","📦 Packhouse Intake","📥 Data Ingestion","👥 My Team"],
+    "record_keeper": ["🌿 Outgrower Registry","📦 Packhouse Intake","📥 Data Ingestion","👥 My Team","🆘 Support"],
     "agronomist": ["🌿 Outgrower Registry","📦 Packhouse Intake"],
     "compliance_officer": [
         "📥 Data Ingestion","📅 Daily Batch Reports",
@@ -137,7 +137,7 @@ ROLE_PAGES = {
         "🌿 Outgrower Registry","📦 Packhouse Intake","📅 Daily Batch Reports",
         "🔍 Pre-Audit Gate","🌍 EUDR Risk Scorer","📄 Compliance PDF",
         "📡 Transmit to Portals","🌱 Carbon Tracking","🗺 Origin Map",
-        "👥 My Team",
+        "👥 My Team","🆘 Support",
     ],
     "admin": [
         "📊 Dashboard","📥 Data Ingestion","📑 Consignment Ledger",
@@ -153,17 +153,20 @@ ROLE_PAGES = {
         "🔧 Hardware Registry","🔑 Invite Codes","👥 My Team","🗑 Demo Reset",
     ],
     "diaspora_owner": [
-        "🌍 My Animals","🌡 Health Alerts","📋 Vet Reports","💳 Payments & Commissions",
+        "🌍 My Animals","🌡 Health Alerts","📋 Vet Reports",
+        "💳 Payments & Commissions","🆘 Support",
     ],
     "veterinarian": [
         "🚨 Clinical Alerts","🐄 Animal Registry","📋 Patient History",
-        "🧪 Disease Probability","📋 Daily Symptom Log","💰 My Earnings","🔧 Hardware Registry",
+        "🧪 Disease Probability","📋 Daily Symptom Log","💰 My Earnings",
+        "🔧 Hardware Registry","🆘 Support",
     ],
     "herdsman": ["📋 Daily Symptom Log","🐄 My Herd","🌡 Temperature Entry"],
     "farm_manager": [
         "📊 Farm Overview","🐄 Animal Registry","🌡 Temperature Entry",
         "📋 Daily Symptom Log","🌡 Health Monitoring","🔧 Hardware Registry",
-        "💰 Cost of Production","🥛 Milk Tracker","📈 Farm P&L","👥 My Team",
+        "💰 Cost of Production","🥛 Milk Tracker","📈 Farm P&L",
+        "👥 My Team","🆘 Support",
     ],
 }
 
@@ -277,7 +280,7 @@ if not st.session_state["authenticated"]:
                     "Invite Code *",
                     placeholder=f"{mod_cfg['invite_prefixes'][0]}-XXXX"
                 )
-                password  = st.text_input("Password *",         type="password", placeholder="Min. 8 characters")
+                password  = st.text_input("Password *",         type="password", placeholder="Min. 10 chars · Upper · Lower · Number · Special (@#$!)")
                 password2 = st.text_input("Confirm Password *", type="password", placeholder="Repeat password")
                 st.markdown("""
                 <div style='background:#0d1224;border:1px solid #1e3a5f;border-radius:8px;
@@ -433,6 +436,7 @@ def save_to_ledger(new_entries):
 
 # ── Trial banner ───────────────────────────────────────────────────────────
 render_trial_banner(profile["username"], role=profile.get("role","exporter"), module="livestock" if "Livestock" in module else "crops")
+render_floating_support_button(profile)
 
 # ══════════════════════════════════════════════════════════════════════════
 # PAGE ROUTING
@@ -824,6 +828,9 @@ elif page == "🗑 Demo Reset":
             st.rerun()
         else:
             st.error("❌ Company name does not match. No data deleted.")
+
+elif page == "🆘 Support":
+    render_support_page(profile)
 
 elif page == "🗺 Origin Map":
     st.markdown("# 🗺 Produce Origin Map")

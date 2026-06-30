@@ -105,14 +105,21 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
     """Enforce strong passwords."""
     if not password:
         return False, "Password is required."
-    if len(password) < 8:
-        return False, "Password must be at least 8 characters."
+    if len(password) < 10:
+        return False, "Password must be at least 10 characters."
     if len(password) > 128:
         return False, "Password too long (max 128 characters)."
     if not re.search(r"[A-Z]", password):
-        return False, "Password must contain at least one uppercase letter."
+        return False, "Password must contain at least one uppercase letter (A-Z)."
+    if not re.search(r"[a-z]", password):
+        return False, "Password must contain at least one lowercase letter (a-z)."
     if not re.search(r"[0-9]", password):
-        return False, "Password must contain at least one number."
+        return False, "Password must contain at least one number (0-9)."
+    if not re.search(r"[@#$!%^&*()_+\-=\[\]{}|;:,.<>?]", password):
+        return False, "Password must contain at least one special character (@#$!%^&*)."
+    common = ["password","password1","12345678","qwerty123","veripath1"]
+    if password.lower() in common:
+        return False, "Password is too common. Choose something unique."
     return True, ""
 
 def validate_temperature(temp: float, species: str = "Goat") -> tuple[bool, str]:
