@@ -5,7 +5,34 @@ from datetime import datetime, timezone
 from supabase_db import get_client
 from security import sanitize_text, check_rate_limit, log_security_event
 
-SUPPORT_WHATSAPP = "254796130512"  # Joseph's number — update when dedicated line ready
+def get_setting(key: str, default: str = "") -> str:
+    try:
+        res = (get_client().table("platform_settings")
+               .select("setting_value")
+               .eq("setting_key", key)
+               .limit(1)
+               .execute())
+        if res.data:
+            return res.data[0]["setting_value"] or default
+        return default
+    except Exception:
+        return default
+
+def set_setting(key: str, value: str, username: str) -> bool:
+    try:
+        get_client().table("platform_settings").upsert({
+            "setting_key":   key,
+            "setting_value": value,
+            "updated_by":    username,
+            "updated_at":    datetime.now(timezone.utc).isoformat(),
+        }, on_conflict="setting_key").execute()
+        return True
+    except Exception as e:
+        st.error(f"Failed to save: {e}")
+        return False
+
+def get_support_whatsapp() -> str:
+    return get_setting("support_whatsapp", "254796130512")
 
 CATEGORIES = [
     "🐛 Bug / something broken",
@@ -54,11 +81,12 @@ def update_ticket(ticket_id: int, status: str, notes: str = "") -> bool:
         return False
 
 def _whatsapp_support_link(username: str, company: str, prefill: str = "") -> str:
+    number = get_support_whatsapp()
     base_msg = f"Hi VeriPath, I need help. Username: {username} | Company: {company}"
     if prefill:
         base_msg += f" | {prefill}"
     msg = urllib.parse.quote(base_msg)
-    return f"https://wa.me/{SUPPORT_WHATSAPP}?text={msg}"
+    return f"https://wa.me/{number}?text={msg}"
 
 def render_floating_support_button(profile: dict):
     """Call this once near the top of any page to show a floating WhatsApp button."""
@@ -119,7 +147,7 @@ def render_support_page(profile: dict):
             💬 Chat on WhatsApp
         </a>
         <div style='color:#64748b;font-size:0.75rem;margin-top:10px'>
-            +254 796 130 512
+            +{get_support_whatsapp()}
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -256,9 +284,41 @@ def render_support_page(profile: dict):
                 </div>
                 """, unsafe_allow_html=True)
 
-    # ── Admin: manage all tickets ──────────────────────────────────────
+    # ── Admin: settings + manage tickets ─────────────────────────────
     if tab_manage is not None:
         with tab_manage:
+            with st.expander("⚙️ Support Contact Settings", expanded=False):
+                st.markdown(
+                    "<small style='color:#64748b'>Update once you have a "
+                    "dedicated business number or email.</small>",
+                    unsafe_allow_html=True
+                )
+                current_wa = get_setting("support_whatsapp", "254796130512")
+                current_email = get_setting("support_email", "")
+                current_hours = get_setting(
+                    "support_business_hours", "Mon-Fri 8AM-6PM EAT"
+                )
+
+                new_wa = st.text_input(
+                    "WhatsApp number (no + or spaces, e.g. 254712345678)",
+                    value=current_wa
+                )
+                new_email = st.text_input(
+                    "Support email (optional)",
+                    value=current_email,
+                    placeholder="support@veripath.africa"
+                )
+                new_hours = st.text_input(
+                    "Business hours",
+                    value=current_hours
+                )
+                if st.button("💾 Save Support Settings", type="primary"):
+                    set_setting("support_whatsapp", new_wa.strip(), username)
+                    set_setting("support_email", new_email.strip(), username)
+                    set_setting("support_business_hours", new_hours.strip(), username)
+                    st.success("✅ Support settings updated.")
+                    st.rerun()
+
             st.markdown("<div class='section-header'>ALL SUPPORT TICKETS</div>",
                         unsafe_allow_html=True)
 
