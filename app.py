@@ -27,6 +27,7 @@ from livestock_alerts   import render_alert_centre
 from livestock_vet_earnings import render_vet_earnings
 from livestock_hardware import render_hardware_registry
 from livestock_admin    import render_admin_overview
+from support import render_support_page, render_floating_support_button
 
 load_dotenv()
 from data_init import ensure_data_files
