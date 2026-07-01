@@ -9,3 +9,4 @@ reportlab
 playwright
 fpdf2
 supabase
+pdfplumber
