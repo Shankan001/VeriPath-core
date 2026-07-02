@@ -443,6 +443,8 @@ def save_to_ledger(new_entries):
             "eudr_risk":   e.get("EUDR_Risk",""),
             "notes":       (e.get("Notes","") + f" | KRA:{e.get('KRA_PIN','')} FOB:${e.get('FOB_Value_USD','')}").strip(" |"),
             "packhouse":   e.get("Packhouse",""),
+            "intake_date": datetime.date.today().isoformat(),
+            "day_of_week": datetime.date.today().strftime("%A"),
             "timestamp":   datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "status":      "pending",
             "source":      e.get("Source",""),
