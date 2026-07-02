@@ -116,7 +116,7 @@ PORTAL_RESPONSES = {
 }
 
 def _simulate_portal(portal: str, consignment: dict) -> dict:
-    c_id     = consignment.get("Consignment_ID", consignment.get("id", "VP-0000"))
+    c_id     = str(consignment.get("session_id") or consignment.get("Consignment_ID") or "VP-0000")
     short_id = c_id[-6:] if len(c_id) >= 6 else c_id
     time.sleep(0.6)
     response = random.choice(PORTAL_RESPONSES.get(portal, [
