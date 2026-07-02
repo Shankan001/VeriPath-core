@@ -79,13 +79,24 @@ def match_farmer(name: str, farmers: dict):
     return None
 
 def normalize_column(col: str) -> str:
-    col_clean = str(col).strip().lower().replace("-","_").replace(" ","_")
+    col_clean = str(col).strip().lower()
+    col_clean = re.sub(r"[()\[\]/,.]", " ", col_clean)
+    col_clean = re.sub(r"[-\s]+", "_", col_clean).strip("_")
     for field, aliases in COLUMN_ALIASES.items():
-        if col_clean in [a.replace(" ","_").replace("-","_") for a in aliases]:
-            return field
-        if col_clean in aliases:
+        alias_clean = [re.sub(r"[-\s]+", "_", re.sub(r"[()\[\]/,.]", " ", a.lower())).strip("_")
+                        for a in aliases]
+        if col_clean in alias_clean:
             return field
     return col_clean
+
+def _find_header_row(raw_df) -> int:
+    best_row, best_score = 0, 0
+    for i in range(min(15, len(raw_df))):
+        row_vals = [normalize_column(v) for v in raw_df.iloc[i].tolist() if str(v).strip() not in ("", "nan")]
+        score = sum(1 for v in row_vals if v in COLUMN_ALIASES.keys())
+        if score > best_score:
+            best_score, best_row = score, i
+    return best_row
 
 def normalize_crop(crop: str) -> str:
     c = str(crop).strip().lower()
@@ -135,11 +146,8 @@ def build_ledger_entries(parsed_records: list, farmers: dict, source: str) -> li
         })
     return entries
 
-# ── API Key helpers ────────────────────────────────────────────────────────
 def get_anthropic_key(input_key: str = "") -> str:
-    """Get and validate Anthropic API key — env first, then input."""
     key = (os.environ.get("ANTHROPIC_API_KEY","") or input_key or "").strip()
-    # Strip any accidental whitespace, newlines, quotes
     key = key.strip().strip('"').strip("'").strip()
     return key
 
@@ -149,7 +157,6 @@ def get_vision_key(input_key: str = "") -> str:
     return key
 
 def validate_anthropic_key(key: str) -> tuple:
-    """Quick validation before making API call."""
     if not key:
         return False, "No API key provided."
     if not key.startswith("sk-ant-"):
@@ -158,9 +165,6 @@ def validate_anthropic_key(key: str) -> tuple:
         return False, "Key too short — check for truncation."
     return True, "OK"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Claude API call
-# ─────────────────────────────────────────────────────────────────────────────
 def call_claude_parser(raw_content: str, api_key: str) -> list:
     import urllib.request
     import urllib.error
@@ -230,23 +234,28 @@ CONTENT:
         st.error(f"Request failed: {e}")
         return []
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 1 — Structured Files
-# ─────────────────────────────────────────────────────────────────────────────
 def rule_based_parse(uploaded_file) -> list:
     name   = uploaded_file.name.lower()
     frames = []
     try:
         if name.endswith(".csv"):
             uploaded_file.seek(0)
-            frames = [pd.read_csv(uploaded_file)]
+            raw = pd.read_csv(uploaded_file, header=None)
+            hdr = _find_header_row(raw)
+            raw.columns = raw.iloc[hdr]
+            frames = [raw.iloc[hdr+1:].reset_index(drop=True)]
         elif name.endswith((".xlsx",".xls")):
             uploaded_file.seek(0)
             xl = pd.ExcelFile(uploaded_file)
             for sheet in xl.sheet_names:
-                df = xl.parse(sheet)
+                raw = xl.parse(sheet, header=None)
+                if raw.empty:
+                    continue
+                hdr = _find_header_row(raw)
+                df = raw.iloc[hdr+1:].copy()
+                df.columns = raw.iloc[hdr]
                 if not df.empty:
-                    frames.append(df)
+                    frames.append(df.reset_index(drop=True))
         elif name.endswith(".docx"):
             import docx
             uploaded_file.seek(0)
@@ -329,9 +338,6 @@ def render_tab_structured(farmers, save_callback):
         st.session_state["ingestion_entries"] = entries
         st.rerun()
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 2 — AI Document Parser
-# ─────────────────────────────────────────────────────────────────────────────
 def extract_text_from_file(uploaded_file) -> tuple:
     name = uploaded_file.name.lower()
     if name.endswith(".pdf"):
@@ -380,7 +386,6 @@ def render_tab_ai(farmers, save_callback):
     st.markdown("#### 🧠 AI Parser — messy PDFs and typed documents")
     st.caption("Claude reads any layout. Needs Anthropic API credits at console.anthropic.com")
 
-    # Key input
     env_key = get_anthropic_key()
     if env_key:
         st.success(f"✅ API key loaded from environment ({env_key[:12]}...)")
@@ -446,9 +451,6 @@ def render_tab_ai(farmers, save_callback):
         st.session_state["ingestion_entries"] = entries
         st.rerun()
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 3 — OCR Scanner
-# ─────────────────────────────────────────────────────────────────────────────
 def call_google_vision(image_bytes: bytes, vision_key: str) -> str:
     import urllib.request
     import urllib.error
@@ -515,7 +517,6 @@ def render_tab_ocr(farmers, save_callback):
         6. **Free tier: 1,000 images/month** — enough for pilot
         """)
 
-    # Vision key
     env_vision = get_vision_key()
     if env_vision:
         st.success(f"✅ Google Vision key loaded from environment ({env_vision[:8]}...)")
@@ -529,7 +530,6 @@ def render_tab_ocr(farmers, save_callback):
         )
         vision_key = get_vision_key(vision_raw)
 
-    # Claude key for structuring
     env_claude = get_anthropic_key()
     if env_claude:
         claude_key = env_claude
@@ -614,9 +614,6 @@ def render_tab_ocr(farmers, save_callback):
         st.session_state["ingestion_entries"] = entries
         st.rerun()
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Shared preview + import
-# ─────────────────────────────────────────────────────────────────────────────
 def render_preview(save_callback):
     entries = st.session_state.get("ingestion_entries",[])
     if not entries:
@@ -687,7 +684,7 @@ def render_preview(save_callback):
     with col2:
         clean_df = pd.DataFrame([{k:v for k,v in e.items() if not k.startswith("_")} for e in entries])
         st.download_button(
-            "⬇️ Download CSV",
+            "⬇ Download CSV",
             data=clean_df.to_csv(index=False).encode("utf-8"),
             file_name=f"VeriPath_Parsed_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
             mime="text/csv",
@@ -696,13 +693,10 @@ def render_preview(save_callback):
         )
 
     with col3:
-        if st.button("🗑️ Clear", use_container_width=True, key="clear_all"):
+        if st.button("🗑 Clear", use_container_width=True, key="clear_all"):
             st.session_state["ingestion_entries"] = []
             st.rerun()
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Main entry point
-# ─────────────────────────────────────────────────────────────────────────────
 def render_data_ingestion_page(save_callback=None):
     st.markdown("# 📥 Data Ingestion")
     st.markdown("<p style='color:#64748b'>Three ways to get farmer data in — structured files, AI documents, or OCR from photos</p>", unsafe_allow_html=True)
