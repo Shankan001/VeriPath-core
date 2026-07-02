@@ -660,7 +660,7 @@ def render_preview(save_callback):
         return {"GREEN":"color:#4ade80","AMBER":"color:#fbbf24","RED":"color:#f87171"}.get(val,"")
 
     st.dataframe(
-        preview_df.style.applymap(color_eudr, subset=["EUDR_Risk"] if "EUDR_Risk" in preview_df.columns else []),
+        preview_df.style.map(color_eudr, subset=["EUDR_Risk"] if "EUDR_Risk" in preview_df.columns else []),
         use_container_width=True,
         height=380
     )
