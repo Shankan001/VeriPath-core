@@ -52,7 +52,10 @@ def render_pre_audit_page(profile: dict):
         return
 
     df = pd.DataFrame(ledger)
-    available_dates = sorted(df["intake_date"].unique(), reverse=True) \
+    available_dates = sorted(
+            [d for d in df["intake_date"].unique() if d and str(d).strip().lower() != "nan"],
+            reverse=True
+        ) \
                       if "intake_date" in df.columns else []
     if not available_dates:
         st.warning("No dated records found.")
