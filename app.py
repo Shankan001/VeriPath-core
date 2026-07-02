@@ -28,6 +28,7 @@ from livestock_vet_earnings import render_vet_earnings
 from livestock_hardware import render_hardware_registry
 from livestock_admin    import render_admin_overview
 from support import render_support_page, render_floating_support_button
+from ledger_db import save_ledger_record, load_ledger
 
 load_dotenv()
 from data_init import ensure_data_files
@@ -427,13 +428,28 @@ if st.sidebar.button("🚪 Sign Out", use_container_width=True):
 
 # ── Save to ledger helper ──────────────────────────────────────────────────
 def save_to_ledger(new_entries):
-    new_df = pd.DataFrame(new_entries)
-    merged = pd.concat(
-        [st.session_state.get("ledger_data", pd.DataFrame()), new_df],
-        ignore_index=True
-    )
-    st.session_state["ledger_data"] = merged
-    save_consignments(merged.to_dict("records"))
+    company = profile.get("company","")
+    for e in new_entries:
+        record = {
+            "company":     company,
+            "session_id":  e.get("Consignment_ID",""),
+            "farmer_id":   e.get("Farmer_ID",""),
+            "farmer_name": e.get("Farmer_Name",""),
+            "county":      e.get("Origin_County",""),
+            "gps":         e.get("GPS",""),
+            "crop":        e.get("Crop_Type",""),
+            "hs_code":     e.get("HS_Code",""),
+            "weight_kg":   e.get("Net_Weight_KG", 0),
+            "eudr_risk":   e.get("EUDR_Risk",""),
+            "notes":       (e.get("Notes","") + f" | KRA:{e.get('KRA_PIN','')} FOB:${e.get('FOB_Value_USD','')}").strip(" |"),
+            "packhouse":   e.get("Packhouse",""),
+            "timestamp":   datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "status":      "pending",
+            "source":      e.get("Source",""),
+        }
+        save_ledger_record(record)
+    st.session_state["ledger_data"] = pd.DataFrame(load_ledger(company))
+
 
 # ── Trial banner ───────────────────────────────────────────────────────────
 render_trial_banner(profile["username"], role=profile.get("role","exporter"), module="livestock" if "Livestock" in module else "crops")
