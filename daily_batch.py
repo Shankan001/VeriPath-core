@@ -20,7 +20,10 @@ def render_daily_batch_page(profile: dict = None):
 
     col1, col2 = st.columns(2)
     with col1:
-        available_dates = sorted(df["intake_date"].unique(), reverse=True)
+        available_dates = sorted(
+            [d for d in df["intake_date"].unique() if d and str(d).strip().lower() != "nan"],
+            reverse=True
+        )
         selected_date = st.selectbox(
             "Select Date", options=available_dates,
             format_func=lambda d: f"{d} ({datetime.strptime(d,'%Y-%m-%d').strftime('%A')})"
