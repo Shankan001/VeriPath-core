@@ -28,6 +28,7 @@ from livestock_vet_earnings import render_vet_earnings
 from livestock_hardware import render_hardware_registry
 from livestock_admin    import render_admin_overview
 from support import render_support_page, render_floating_support_button
+from certificate_vault_page import render_certificate_vault_page
 from ledger_db import save_ledger_record, load_ledger
 
 load_dotenv()
@@ -132,19 +133,19 @@ ROLE_PAGES = {
     "agronomist": ["🌿 Outgrower Registry","📦 Packhouse Intake"],
     "compliance_officer": [
         "📥 Data Ingestion","📅 Daily Batch Reports",
-        "🔍 Pre-Audit Gate","🌍 EUDR Risk Scorer","📄 Compliance PDF",
+        "🔍 Pre-Audit Gate","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault",
     ],
     "exporter": [
         "📊 Dashboard","📥 Data Ingestion","📑 Consignment Ledger",
         "🌿 Outgrower Registry","📦 Packhouse Intake","📅 Daily Batch Reports",
-        "🔍 Pre-Audit Gate","🌍 EUDR Risk Scorer","📄 Compliance PDF",
+        "🔍 Pre-Audit Gate","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault",
         "📡 Transmit to Portals","🌱 Carbon Tracking","🗺 Origin Map",
         "👥 My Team","🆘 Support",
     ],
     "admin": [
         "📊 Dashboard","📥 Data Ingestion","📑 Consignment Ledger",
         "🌿 Outgrower Registry","📦 Packhouse Intake","📅 Daily Batch Reports",
-        "🔍 Pre-Audit Gate","🌍 EUDR Risk Scorer","📄 Compliance PDF",
+        "🔍 Pre-Audit Gate","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault",
         "📡 Transmit to Portals","🌱 Carbon Tracking","🗺 Origin Map",
         "📈 KPI Dashboard","🔑 Invite Codes","👥 My Team","🗑 Demo Reset",
     ],
@@ -562,6 +563,9 @@ elif page == "🌍 EUDR Risk Scorer":
 
 elif page == "📄 Compliance PDF":
     render_compliance_pdf_page(profile=profile)
+
+elif page == "🔐 Certificate Vault":
+    render_certificate_vault_page(profile)
 
 elif page == "📡 Transmit to Portals":
     st.markdown("# 📡 Transmit to Government Portals")
