@@ -10,3 +10,5 @@ playwright
 fpdf2
 supabase
 pdfplumber
+pypdf
+anthropic
