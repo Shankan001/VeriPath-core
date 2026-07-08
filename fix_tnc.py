@@ -21,7 +21,7 @@ new = '''            invite_code = st.text_input("Invite Code *", placeholder="V
             <div style='background:#0d1224;border:1px solid #1e3a5f;border-radius:8px;
                         padding:12px 16px;margin:8px 0;font-size:0.82rem;color:#94a3b8'>
                 By registering, you agree to VeriPath Africa\'s
-                <a href='https://github.com/Shankan001/VeriPath-core/blob/main/docs/VeriPath_Terms_Conditions.pdf'
+                <a href='https://veripath.co.ke/terms.html'
                    target='_blank' style='color:#38bdf8;text-decoration:underline'>
                    Terms &amp; Conditions
                 </a>.
