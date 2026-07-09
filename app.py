@@ -29,6 +29,7 @@ from livestock_hardware import render_hardware_registry
 from livestock_admin    import render_admin_overview
 from support import render_support_page, render_floating_support_button
 from certificate_vault_page import render_certificate_vault_page
+from farm_boundary_upload import render_farm_boundary_upload_page
 from ledger_db import save_ledger_record, load_ledger
 
 load_dotenv()
@@ -133,19 +134,19 @@ ROLE_PAGES = {
     "agronomist": ["🌿 Outgrower Registry","📦 Packhouse Intake"],
     "compliance_officer": [
         "📥 Data Ingestion","📅 Daily Batch Reports",
-        "🔍 Pre-Audit Gate","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault",
+        "🔍 Pre-Audit Gate","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault","🛰 Farm Boundary Upload",
     ],
     "exporter": [
         "📊 Dashboard","📥 Data Ingestion","📑 Consignment Ledger",
         "🌿 Outgrower Registry","📦 Packhouse Intake","📅 Daily Batch Reports",
-        "🔍 Pre-Audit Gate","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault",
+        "🔍 Pre-Audit Gate","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault","🛰 Farm Boundary Upload",
         "📡 Transmit to Portals","🌱 Carbon Tracking","🗺 Origin Map",
         "👥 My Team","🆘 Support",
     ],
     "admin": [
         "📊 Dashboard","📥 Data Ingestion","📑 Consignment Ledger",
         "🌿 Outgrower Registry","📦 Packhouse Intake","📅 Daily Batch Reports",
-        "🔍 Pre-Audit Gate","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault",
+        "🔍 Pre-Audit Gate","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault","🛰 Farm Boundary Upload",
         "📡 Transmit to Portals","🌱 Carbon Tracking","🗺 Origin Map",
         "📈 KPI Dashboard","🔑 Invite Codes","👥 My Team","🗑 Demo Reset",
     ],
@@ -566,6 +567,9 @@ elif page == "📄 Compliance PDF":
 
 elif page == "🔐 Certificate Vault":
     render_certificate_vault_page(profile)
+
+elif page == "🛰 Farm Boundary Upload":
+    render_farm_boundary_upload_page(profile)
 
 elif page == "📡 Transmit to Portals":
     st.markdown("# 📡 Transmit to Government Portals")
