@@ -32,6 +32,11 @@ from certificate_vault_page import render_certificate_vault_page
 from farm_boundary_upload import render_farm_boundary_upload_page
 from ndvi_dashboard import render_ndvi_dashboard_page
 from weather_risk_dashboard import render_weather_risk_dashboard_page
+from session_persistence import (
+    get_valid_username_from_cookie, create_session,
+    set_session_cookie, clear_session
+)
+from supabase_db import get_user
 from ledger_db import save_ledger_record, load_ledger
 
 load_dotenv()
@@ -181,6 +186,18 @@ for key, val in [("authenticated",False),("user_profile",None),("auth_page","log
     if key not in st.session_state:
         st.session_state[key] = val
 
+# ── Restore session from cookie (survives page refresh) ────────────────────
+if not st.session_state["authenticated"]:
+    _cookie_username = get_valid_username_from_cookie()
+    if _cookie_username:
+        _restored_user = get_user(_cookie_username)
+        if _restored_user:
+            st.session_state["authenticated"] = True
+            st.session_state["user_profile"] = {
+                k: v for k, v in _restored_user.items()
+                if k not in ("password", "salt")
+            }
+
 # ── Auth wall ──────────────────────────────────────────────────────────────
 if not st.session_state["authenticated"]:
     st.markdown("<div style='text-align:center;margin-top:60px'>", unsafe_allow_html=True)
@@ -213,6 +230,8 @@ if not st.session_state["authenticated"]:
                 if ok:
                     st.session_state["authenticated"] = True
                     st.session_state["user_profile"]  = profile
+                    _token = create_session(profile["username"])
+                    set_session_cookie(_token)
                     st.success(f"✅ {msg}")
                     st.rerun()
                 else:
@@ -425,6 +444,7 @@ st.sidebar.markdown("---")
 render_container_tracker(profile["username"], module="livestock" if "Livestock" in module else "crops", role=role)
 
 if st.sidebar.button("🚪 Sign Out", use_container_width=True):
+    clear_session()
     for k in ["authenticated","user_profile","auth_page","audit_result",
               "batch_approved","intake_rows","ingestion_entries","reg_module"]:
         st.session_state.pop(k, None)

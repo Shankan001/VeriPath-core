@@ -1,12 +1,14 @@
 """
-VeriPath NDVI System — Farm Boundary Upload
-Lets field staff/exporters upload a real GPS-surveyed farm boundary
-(GeoJSON or KML, exported from apps like Fields Area Measure) instead of
-hand-drawing on a map — more accurate for actual field data collection.
+VeriPath — Farm Boundary Registration
+Two ways to register a farm boundary: upload a GeoJSON/KML file from a
+survey app, or walk the boundary and tap to capture each corner's GPS point.
 """
+
 import streamlit as st
 import json
 import xml.etree.ElementTree as ET
+import pandas as pd
+from streamlit_js_eval import get_geolocation
 from supabase_db import get_client
 
 
@@ -61,103 +63,203 @@ def parse_geojson_polygon(geojson_bytes: bytes) -> dict:
         return {"success": False, "geojson": None, "error": f"Could not parse GeoJSON: {str(e)}"}
 
 
+def get_scoped_farmers(supabase, profile):
+    company = profile.get("company", "") if profile.get("role") != "admin" else ""
+    try:
+        q = supabase.table("farmers").select("farmer_id, name, phone, company")
+        farmers_result = q.order("name").execute().data
+        if company:
+            company_norm = company.strip().lower()
+            farmers_result = [
+                f for f in farmers_result
+                if f.get("company", "").strip().lower() == company_norm
+            ]
+    except Exception:
+        farmers_result = []
+    return farmers_result
+
+
+def check_duplicate(supabase, farmer_id, farm_name):
+    try:
+        existing = supabase.table("farm_boundaries").select("id").eq(
+            "farmer_id", farmer_id
+        ).eq("farm_name", farm_name).execute().data
+    except Exception:
+        existing = []
+    return bool(existing)
+
+
+def save_boundary(supabase, farm_name, farmer_id, outgrower_block_id, geojson_dict):
+    geojson_str = json.dumps(geojson_dict)
+    try:
+        result = supabase.rpc("insert_farm_boundary", {
+            "p_farm_name": farm_name,
+            "p_farmer_id": farmer_id,
+            "p_outgrower_block_id": outgrower_block_id or None,
+            "p_geojson": geojson_str,
+        }).execute()
+        return result.data
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 def render_farm_boundary_upload_page(profile: dict):
-    st.markdown("# 🛰 Farm Boundary Upload")
+    st.markdown("# 🛰 Farm Boundary Registration")
     st.markdown(
-        "<p style='color:#64748b'>Upload a real GPS-surveyed farm boundary — export from "
-        "Fields Area Measure, ODK, or similar field survey apps as GeoJSON or KML.</p>",
+        "<p style='color:#64748b'>Register a farm boundary by uploading a surveyed file, "
+        "or by walking the perimeter and capturing GPS points directly.</p>",
         unsafe_allow_html=True
     )
     st.markdown("---")
 
     supabase = get_client()
-    username = profile.get("username", "")
-    company = profile.get("company", "") if profile.get("role") != "admin" else ""
+    farmers_result = get_scoped_farmers(supabase, profile)
 
-    col1, col2 = st.columns(2)
-    with col1:
-        farm_name = st.text_input("Farm name")
-        outgrower_block_id = st.text_input(
-            "Outgrower block ID",
-            help="Same block ID used in the Certificate Vault — links this boundary to MRL red-listing."
-        )
-    with col2:
-        try:
-            q = supabase.table("farmers").select("farmer_id, name, phone, company")
-            if company:
-                q = q.eq("company", company.strip())
-            farmers_result = q.order("name").execute().data
-        except Exception:
-            farmers_result = []
+    tab_upload, tab_walk = st.tabs(["📁 Upload File", "📍 Walk the Boundary"])
 
-        if not farmers_result:
-            st.warning("No registered farmers found. Register the farmer first before uploading a boundary.")
-            selected_farmer_id = None
-        else:
-            farmer_options = {
-                f"{f['name']} ({f['phone']}) — {f['farmer_id']}": f["farmer_id"]
-                for f in farmers_result
-            }
-            selected_label = st.selectbox("Owner / farmer", options=list(farmer_options.keys()))
-            selected_farmer_id = farmer_options[selected_label]
-
-    uploaded = st.file_uploader("Boundary file", type=["geojson", "json", "kml"])
-
-    if uploaded is not None and st.button("📍 Save Boundary", type="primary", use_container_width=True):
-        if not farm_name:
-            st.error("❌ Farm name is required.")
-            st.stop()
-
-        if not selected_farmer_id:
-            st.error("❌ No farmer selected — register the farmer first.")
-            st.stop()
-
-        # Guard against accidental double-submit / duplicate boundary for the same farmer+name
-        try:
-            existing = supabase.table("farm_boundaries").select("id").eq(
-                "farmer_id", selected_farmer_id
-            ).eq("farm_name", farm_name).execute().data
-        except Exception:
-            existing = []
-
-        if existing:
-            st.error(
-                f"❌ **{farm_name}** already has a saved boundary for this farmer. "
-                f"Use a different farm name, or delete the existing boundary first if this is a correction."
+    # ── TAB 1: Upload File ──────────────────────────────────────────────
+    with tab_upload:
+        col1, col2 = st.columns(2)
+        with col1:
+            farm_name_u = st.text_input("Farm name", key="farm_name_upload")
+            outgrower_block_id_u = st.text_input(
+                "Outgrower block ID", key="block_id_upload",
+                help="Same block ID used in the Certificate Vault — links this boundary to MRL red-listing."
             )
-            st.stop()
+        with col2:
+            if not farmers_result:
+                st.warning("No registered farmers found for your company. Register the farmer first.")
+                selected_farmer_id_u = None
+            else:
+                farmer_options = {
+                    f"{f['name']} ({f['phone']}) — {f['farmer_id']}": f["farmer_id"]
+                    for f in farmers_result
+                }
+                selected_label_u = st.selectbox("Owner / farmer", options=list(farmer_options.keys()), key="farmer_upload")
+                selected_farmer_id_u = farmer_options[selected_label_u]
 
-        file_bytes = uploaded.getvalue()
+        uploaded = st.file_uploader("Boundary file", type=["geojson", "json", "kml"])
 
-        if uploaded.name.lower().endswith(".kml"):
-            parse_result = parse_kml_polygon(file_bytes)
-        else:
-            parse_result = parse_geojson_polygon(file_bytes)
+        if uploaded is not None and st.button("📍 Save Boundary", type="primary", use_container_width=True, key="save_upload"):
+            if not farm_name_u:
+                st.error("❌ Farm name is required.")
+                st.stop()
+            if not selected_farmer_id_u:
+                st.error("❌ No farmer selected — register the farmer first.")
+                st.stop()
+            if check_duplicate(supabase, selected_farmer_id_u, farm_name_u):
+                st.error(f"❌ **{farm_name_u}** already has a saved boundary for this farmer. Use a different farm name.")
+                st.stop()
 
-        if not parse_result["success"]:
-            st.error(f"❌ {parse_result['error']}")
-            st.stop()
+            file_bytes = uploaded.getvalue()
+            if uploaded.name.lower().endswith(".kml"):
+                parse_result = parse_kml_polygon(file_bytes)
+            else:
+                parse_result = parse_geojson_polygon(file_bytes)
 
-        geojson_str = json.dumps(parse_result["geojson"])
+            if not parse_result["success"]:
+                st.error(f"❌ {parse_result['error']}")
+                st.stop()
 
-        try:
-            result = supabase.rpc("insert_farm_boundary", {
-                "p_farm_name": farm_name,
-                "p_farmer_id": selected_farmer_id,
-                "p_outgrower_block_id": outgrower_block_id or None,
-                "p_geojson": geojson_str,
-            }).execute()
-
-            response = result.data
+            response = save_boundary(supabase, farm_name_u, selected_farmer_id_u, outgrower_block_id_u, parse_result["geojson"])
             if response.get("success"):
                 area = response.get("area_hectares")
-                st.success(f"✅ Boundary saved for **{farm_name}** — computed area: **{area:.2f} hectares**")
+                st.success(f"✅ Boundary saved for **{farm_name_u}** — computed area: **{area:.2f} hectares**")
                 st.rerun()
             else:
                 st.error(f"❌ {response.get('error')}")
 
-        except Exception as e:
-            st.error(f"❌ Save failed: {str(e)}")
+    # ── TAB 2: Walk the Boundary ─────────────────────────────────────────
+    with tab_walk:
+        st.markdown(
+            "<p style='color:#64748b;font-size:0.85rem'>Stand at each corner of the farm and tap "
+            "'Capture Point'. Once every corner is marked, tap 'Finish Boundary'.</p>",
+            unsafe_allow_html=True
+        )
+
+        if "boundary_points" not in st.session_state:
+            st.session_state["boundary_points"] = []
+
+        col1, col2 = st.columns(2)
+        with col1:
+            farm_name_w = st.text_input("Farm name", key="farm_name_walk")
+            outgrower_block_id_w = st.text_input(
+                "Outgrower block ID", key="block_id_walk",
+                help="Same block ID used in the Certificate Vault — links this boundary to MRL red-listing."
+            )
+        with col2:
+            if not farmers_result:
+                st.warning("No registered farmers found for your company. Register the farmer first.")
+                selected_farmer_id_w = None
+            else:
+                farmer_options = {
+                    f"{f['name']} ({f['phone']}) — {f['farmer_id']}": f["farmer_id"]
+                    for f in farmers_result
+                }
+                selected_label_w = st.selectbox("Owner / farmer", options=list(farmer_options.keys()), key="farmer_walk")
+                selected_farmer_id_w = farmer_options[selected_label_w]
+
+        col_a, col_b, col_c = st.columns(3)
+        with col_a:
+            if st.button("📍 Capture Point", type="primary", use_container_width=True):
+                loc = get_geolocation()
+                if loc and "coords" in loc:
+                    lat = loc["coords"]["latitude"]
+                    lon = loc["coords"]["longitude"]
+                    accuracy = loc["coords"].get("accuracy", None)
+                    st.session_state["boundary_points"].append({"lat": lat, "lon": lon, "accuracy": accuracy})
+                    st.success(f"✅ Point {len(st.session_state['boundary_points'])} captured")
+                    st.rerun()
+                else:
+                    st.error("❌ Could not get GPS location. Allow location access in your browser.")
+        with col_b:
+            if st.button("↩️ Undo Last Point", use_container_width=True):
+                if st.session_state["boundary_points"]:
+                    st.session_state["boundary_points"].pop()
+                    st.rerun()
+        with col_c:
+            if st.button("🗑️ Clear All Points", use_container_width=True):
+                st.session_state["boundary_points"] = []
+                st.rerun()
+
+        points = st.session_state["boundary_points"]
+        st.markdown(f"**Points captured: {len(points)}** (minimum 3 required)")
+
+        if points:
+            display_rows = [{
+                "#": i + 1,
+                "Latitude": round(p["lat"], 6),
+                "Longitude": round(p["lon"], 6),
+                "Accuracy": f"±{p['accuracy']:.0f}m" if p.get("accuracy") else "—",
+            } for i, p in enumerate(points)]
+            st.dataframe(pd.DataFrame(display_rows), use_container_width=True, hide_index=True)
+
+        if st.button("✅ Finish Boundary & Save", type="primary", use_container_width=True, key="save_walk"):
+            if not farm_name_w:
+                st.error("❌ Farm name is required.")
+                st.stop()
+            if not selected_farmer_id_w:
+                st.error("❌ No farmer selected — register the farmer first.")
+                st.stop()
+            if len(points) < 3:
+                st.error(f"❌ Need at least 3 points — you have {len(points)}.")
+                st.stop()
+            if check_duplicate(supabase, selected_farmer_id_w, farm_name_w):
+                st.error(f"❌ **{farm_name_w}** already has a saved boundary for this farmer. Use a different farm name.")
+                st.stop()
+
+            ring = [[p["lon"], p["lat"]] for p in points]
+            ring.append(ring[0])
+            geojson = {"type": "Polygon", "coordinates": [ring]}
+
+            response = save_boundary(supabase, farm_name_w, selected_farmer_id_w, outgrower_block_id_w, geojson)
+            if response.get("success"):
+                area = response.get("area_hectares")
+                st.success(f"✅ Boundary saved for **{farm_name_w}** — computed area: **{area:.2f} hectares**")
+                st.session_state["boundary_points"] = []
+                st.rerun()
+            else:
+                st.error(f"❌ {response.get('error')}")
 
     st.markdown("---")
     st.markdown("<div class='section-header'>SAVED FARM BOUNDARIES</div>", unsafe_allow_html=True)
@@ -173,5 +275,4 @@ def render_farm_boundary_upload_page(profile: dict):
     if not farms:
         st.info("No farm boundaries uploaded yet.")
     else:
-        import pandas as pd
         st.dataframe(pd.DataFrame(farms), use_container_width=True, hide_index=True)
