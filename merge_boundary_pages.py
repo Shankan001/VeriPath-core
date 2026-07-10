@@ -1,4 +1,9 @@
-"""
+with open("farm_boundary_upload.py", "r") as f:
+    upload_content = f.read()
+
+
+# Extract the imports we need from recorder (geolocation) that upload doesn't have
+merged = '''"""
 VeriPath — Farm Boundary Registration
 Two ways to register a farm boundary: upload a GeoJSON/KML file from a
 survey app, or walk the boundary and tap to capture each corner's GPS point.
@@ -276,3 +281,9 @@ def render_farm_boundary_upload_page(profile: dict):
         st.info("No farm boundaries uploaded yet.")
     else:
         st.dataframe(pd.DataFrame(farms), use_container_width=True, hide_index=True)
+'''
+
+with open("farm_boundary_upload.py", "w") as f:
+    f.write(merged)
+
+print("Merged successfully into farm_boundary_upload.py")

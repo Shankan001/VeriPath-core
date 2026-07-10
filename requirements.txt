@@ -13,3 +13,5 @@ pdfplumber
 pypdf
 anthropic
 requests
+extra-streamlit-components
+streamlit-js-eval
