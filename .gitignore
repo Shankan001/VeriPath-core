@@ -37,3 +37,4 @@ data/*.log
 kakuzi_avocado_packing_list_2024.xlsx
 *.xlsx
 .env
+node_modules/

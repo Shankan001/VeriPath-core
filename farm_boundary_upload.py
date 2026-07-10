@@ -93,7 +93,6 @@ def render_farm_boundary_upload_page(profile: dict):
         if not farmers_result:
             st.warning("No registered farmers found. Register the farmer first before uploading a boundary.")
             selected_farmer_id = None
-            owner_username = username
         else:
             farmer_options = {
                 f"{f['name']} ({f['phone']}) — {f['farmer_id']}": f["farmer_id"]
@@ -101,7 +100,6 @@ def render_farm_boundary_upload_page(profile: dict):
             }
             selected_label = st.selectbox("Owner / farmer", options=list(farmer_options.keys()))
             selected_farmer_id = farmer_options[selected_label]
-            owner_username = selected_label
 
     uploaded = st.file_uploader("Boundary file", type=["geojson", "json", "kml"])
 
@@ -145,10 +143,9 @@ def render_farm_boundary_upload_page(profile: dict):
         try:
             result = supabase.rpc("insert_farm_boundary", {
                 "p_farm_name": farm_name,
-                "p_owner_username": owner_username,
+                "p_farmer_id": selected_farmer_id,
                 "p_outgrower_block_id": outgrower_block_id or None,
                 "p_geojson": geojson_str,
-                "p_farmer_id": selected_farmer_id,
             }).execute()
 
             response = result.data
@@ -167,7 +164,7 @@ def render_farm_boundary_upload_page(profile: dict):
 
     try:
         farms = supabase.table("farm_boundaries").select(
-            "id, farm_name, owner_username, outgrower_block_id, area_hectares, created_at"
+            "id, farm_name, farmer_id, outgrower_block_id, area_hectares, created_at"
         ).order("created_at", desc=True).execute().data
     except Exception as e:
         st.error(f"Could not load boundaries: {str(e)}")
