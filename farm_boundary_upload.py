@@ -201,7 +201,7 @@ def render_farm_boundary_upload_page(profile: dict):
 
         # Fetch location unconditionally every rerun — calling get_geolocation()
         # only inside a button's if-block is a known broken pattern with this library.
-        current_loc = get_geolocation(key=f"geo_{len(st.session_state['boundary_points'])}")
+        current_loc = get_geolocation()
 
         if current_loc and "error" in current_loc:
             err_code = current_loc["error"].get("code")
