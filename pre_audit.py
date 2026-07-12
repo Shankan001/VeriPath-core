@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from ledger_db import load_ledger, save_full_ledger
+from ledger_db import load_ledger, save_full_ledger, update_ledger_record_by_id
+from datetime import datetime, timezone
 import os, json
 
 REQUIRED_FIELDS = ["farmer_id","farmer_name","county","crop",
@@ -85,8 +86,26 @@ def render_pre_audit_page(profile: dict):
     if st.button("🔍 Run Pre-Audit Check", use_container_width=True, type="primary"):
         result = run_audit(batch_df.to_dict("records"))
         st.session_state["audit_result"] = result
-        # Clear any previous submission flag when re-running audit
         st.session_state.pop("submission_flagged", None)
+
+        # Persist audit_status to the database so it survives refresh and
+        # is visible on the Quarantine Desk without re-running the audit.
+        now_iso = datetime.now(timezone.utc).isoformat()
+        for r in result["clean_records"]:
+            if r.get("id"):
+                update_ledger_record_by_id(r["id"], {
+                    "audit_status": "verified",
+                    "audit_failure_reason": None,
+                    "flagged_for_approval": False,
+                })
+        for r in (result["eudr_flags"] + result["missing_flags"]):
+            if r.get("id"):
+                update_ledger_record_by_id(r["id"], {
+                    "audit_status": "flagged",
+                    "flagged_at": now_iso,
+                    "flagged_for_approval": True,
+                    "audit_failure_reason": "; ".join(r.get("audit_issues", [])),
+                })
 
     if "audit_result" not in st.session_state:
         return

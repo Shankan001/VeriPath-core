@@ -31,3 +31,7 @@ def delete_ledger_record(session_id: str, crop: str,
 
 def clear_company_ledger(company: str) -> int:
     return clear_company_ledger_db(company)
+
+def update_ledger_record_by_id(record_id: int, updates: dict) -> bool:
+    from supabase_db import update_ledger_record_by_id_db
+    return update_ledger_record_by_id_db(record_id, updates)
