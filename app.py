@@ -32,6 +32,7 @@ from certificate_vault_page import render_certificate_vault_page
 from farm_boundary_upload import render_farm_boundary_upload_page
 from ndvi_dashboard import render_ndvi_dashboard_page
 from weather_risk_dashboard import render_weather_risk_dashboard_page
+from quarantine_desk import render_quarantine_desk_page
 from session_persistence import (
     get_valid_username_from_cookie, create_session,
     set_session_cookie, clear_session
@@ -141,19 +142,19 @@ ROLE_PAGES = {
     "agronomist": ["🌿 Outgrower Registry","📦 Packhouse Intake"],
     "compliance_officer": [
         "📥 Data Ingestion","📅 Daily Batch Reports",
-        "🔍 Pre-Audit Gate","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault","🛰 Farm Boundary Upload","🌱 NDVI Crop Health","⛈️ Flash Weather Risk",
+        "🔍 Pre-Audit Gate","🧪 Quarantine Desk","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault","🛰 Farm Boundary Upload","🌱 NDVI Crop Health","⛈️ Flash Weather Risk",
     ],
     "exporter": [
         "📊 Dashboard","📥 Data Ingestion","📑 Consignment Ledger",
         "🌿 Outgrower Registry","📦 Packhouse Intake","📅 Daily Batch Reports",
-        "🔍 Pre-Audit Gate","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault","🛰 Farm Boundary Upload","🌱 NDVI Crop Health","⛈️ Flash Weather Risk",
+        "🔍 Pre-Audit Gate","🧪 Quarantine Desk","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault","🛰 Farm Boundary Upload","🌱 NDVI Crop Health","⛈️ Flash Weather Risk",
         "📡 Transmit to Portals","🌱 Carbon Tracking","🗺 Origin Map",
         "👥 My Team","🆘 Support",
     ],
     "admin": [
         "📊 Dashboard","📥 Data Ingestion","📑 Consignment Ledger",
         "🌿 Outgrower Registry","📦 Packhouse Intake","📅 Daily Batch Reports",
-        "🔍 Pre-Audit Gate","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault","🛰 Farm Boundary Upload","🌱 NDVI Crop Health","⛈️ Flash Weather Risk",
+        "🔍 Pre-Audit Gate","🧪 Quarantine Desk","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault","🛰 Farm Boundary Upload","🌱 NDVI Crop Health","⛈️ Flash Weather Risk",
         "📡 Transmit to Portals","🌱 Carbon Tracking","🗺 Origin Map",
         "📈 KPI Dashboard","🔑 Invite Codes","👥 My Team","🗑 Demo Reset",
     ],
@@ -580,6 +581,9 @@ elif page == "📅 Daily Batch Reports":
 
 elif page == "🔍 Pre-Audit Gate":
     render_pre_audit_page(profile)
+
+elif page == "🧪 Quarantine Desk":
+    render_quarantine_desk_page(profile)
 
 elif page == "🌍 EUDR Risk Scorer":
     render_eudr_page()
