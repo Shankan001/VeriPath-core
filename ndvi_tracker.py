@@ -107,8 +107,8 @@ def fetch_ndvi_stats(token: str, geometry: dict, start: date, end: date):
             },
             "aggregationInterval": {"of": "P14D"},
             "evalscript": evalscript,
-            "resx": 10,
-            "resy": 10
+            "resx": 0.00009,
+            "resy": 0.00009
         }
     }
 
