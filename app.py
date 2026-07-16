@@ -7,7 +7,8 @@ from dotenv import load_dotenv
 from db              import load_consignments, save_consignments
 from auth            import register_user, login_user
 from eudr            import get_eudr_risk, score_dataframe, EUDR_REGULATED_CROPS, render_eudr_page
-from bridge_engine   import transmit_consignment, save_transmission_log, load_transmission_log, get_bridge_mode, get_credential_status, set_bridge_mode, set_portal_credentials, generate_kentrade_csv, generate_kephis_csv
+from bridge_engine   import transmit_consignment, get_bridge_mode, get_credential_status, set_bridge_mode, set_portal_credentials, generate_kentrade_csv, generate_kephis_csv
+from supabase_db import save_transmission_log_db, load_transmission_log_db
 from qr_generator    import render_qr_page
 from packhouse       import render_packhouse_page
 from compliance_pdf  import render_compliance_pdf_page
@@ -33,6 +34,7 @@ from farm_boundary_upload import render_farm_boundary_upload_page
 from ndvi_dashboard import render_ndvi_dashboard_page
 from weather_risk_dashboard import render_weather_risk_dashboard_page
 from quarantine_desk import render_quarantine_desk_page
+from company_profile import render_company_profile_page
 from session_persistence import (
     get_valid_username_from_cookie, create_session,
     set_session_cookie, clear_session
@@ -149,7 +151,7 @@ ROLE_PAGES = {
         "🌿 Outgrower Registry","📦 Packhouse Intake","📅 Daily Batch Reports",
         "🔍 Pre-Audit Gate","🧪 Quarantine Desk","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault","🛰 Farm Boundary Upload","🌱 NDVI Crop Health","⛈️ Flash Weather Risk",
         "📡 Transmit to Portals","🌱 Carbon Tracking","🗺 Origin Map",
-        "👥 My Team","🆘 Support",
+        "🏢 Company Profile","👥 My Team","🆘 Support",
     ],
     "admin": [
         "📊 Dashboard","📥 Data Ingestion","📑 Consignment Ledger",
@@ -178,7 +180,7 @@ ROLE_PAGES = {
         "📊 Farm Overview","🐄 Animal Registry","🌡 Temperature Entry",
         "📋 Daily Symptom Log","🌡 Health Monitoring","🔧 Hardware Registry",
         "💰 Cost of Production","🥛 Milk Tracker","📈 Farm P&L",
-        "👥 My Team","🆘 Support",
+        "🏢 Company Profile","👥 My Team","🆘 Support",
     ],
 }
 
@@ -466,7 +468,9 @@ def save_to_ledger(new_entries):
             "hs_code":     e.get("HS_Code",""),
             "weight_kg":   e.get("Net_Weight_KG", 0),
             "eudr_risk":   e.get("EUDR_Risk",""),
-            "notes":       (e.get("Notes","") + f" | KRA:{e.get('KRA_PIN','')} FOB:${e.get('FOB_Value_USD','')}").strip(" |"),
+            "notes":       e.get("Notes",""),
+            "kra_pin":     e.get("KRA_PIN",""),
+            "fob_value_usd": float(e.get("FOB_Value_USD", 0) or 0),
             "packhouse":   e.get("Packhouse",""),
             "intake_date": datetime.date.today().isoformat(),
             "day_of_week": datetime.date.today().strftime("%A"),
@@ -627,12 +631,25 @@ elif page == "📡 Transmit to Portals":
                          type="secondary" if get_bridge_mode()=="real" else "primary"):
                 set_bridge_mode("simulation")
                 st.rerun()
+        from supabase_db import get_client as _gc
+        try:
+            _live_setting = _gc().table("platform_settings").select("setting_value").eq(
+                "setting_key", "live_transmission_enabled"
+            ).execute().data
+            _live_enabled = _live_setting[0]["setting_value"] == "true" if _live_setting else False
+        except Exception:
+            _live_enabled = False
+
         with col_tog2:
-            if st.button("🟢 LIVE MODE",
-                         use_container_width=True,
-                         type="primary" if get_bridge_mode()=="real" else "secondary"):
-                set_bridge_mode("real")
-                st.rerun()
+            if _live_enabled:
+                if st.button("🟢 LIVE MODE",
+                             use_container_width=True,
+                             type="primary" if get_bridge_mode()=="real" else "secondary"):
+                    set_bridge_mode("real")
+                    st.rerun()
+            else:
+                st.button("🔒 LIVE MODE (Locked)", use_container_width=True, disabled=True,
+                           help="Live portal submission is locked until official integration approval is confirmed by VeriPath admin.")
 
         mode = get_bridge_mode()
         if mode == "simulation":
@@ -721,7 +738,35 @@ elif page == "📡 Transmit to Portals":
                         done += len(portal_options)
                         progress.progress(done / total)
 
-                save_transmission_log(all_results)
+                _batch_ref = f"{st.session_state.get('audit_result',{}).get('run_at','')[:10]}_{profile.get('company','')}"
+                _allowed_keys = {"company", "consignment", "portal", "status", "message", "submitted_at"}
+                _clean_results = [
+                    {k: v for k, v in _r.items() if k in _allowed_keys} | {"batch_reference": _batch_ref}
+                    for _r in all_results
+                ]
+                save_transmission_log_db(_clean_results, company=profile.get("company",""))
+
+                # ── Create real consignment records for successfully
+                # transmitted batches (previously never wired in —
+                # consignments table stayed empty regardless of submission)
+                from db import add_consignment
+                submitted_consignment_ids = {
+                    r.get("consignment") for r in all_results if r["status"] == "submitted"
+                }
+                for record in approved:
+                    if record.get("session_id") in submitted_consignment_ids:
+                        add_consignment({
+                            "consignment_id": record.get("session_id", ""),
+                            "farmer_name":     record.get("farmer_name", ""),
+                            "crop_type":       record.get("crop", ""),
+                            "kra_pin":         record.get("kra_pin", ""),
+                            "pin_valid":       "valid" if record.get("kra_pin") else "unknown",
+                            "hs_code":         record.get("hs_code", ""),
+                            "origin_county":   record.get("county", ""),
+                            "net_weight_kg":   record.get("weight_kg", 0),
+                            "fob_value_usd":   record.get("fob_value_usd", 0.0),
+                            "source":          "transmit_to_portals",
+                        }, company=profile.get("company",""))
 
                 # ── Results display ────────────────────────────────────
                 success = [r for r in all_results if r["status"] == "submitted"]
@@ -800,12 +845,20 @@ elif page == "📡 Transmit to Portals":
                     else:
                         st.warning("No approved records. Run Pre-Audit Gate first.")
 
-        log = load_transmission_log()
+        log = load_transmission_log_db(company=profile.get("company",""))
         if log:
             st.markdown("---")
             st.markdown("<div class='section-header'>TRANSMISSION LOG</div>",
                         unsafe_allow_html=True)
-            st.dataframe(pd.DataFrame(log), use_container_width=True)
+            log_df = pd.DataFrame(log)
+            if "batch_reference" in log_df.columns:
+                batch_options = ["All Batches"] + sorted(
+                    [b for b in log_df["batch_reference"].dropna().unique() if b], reverse=True
+                )
+                selected_batch = st.selectbox("Filter by batch", batch_options)
+                if selected_batch != "All Batches":
+                    log_df = log_df[log_df["batch_reference"] == selected_batch]
+            st.dataframe(log_df, use_container_width=True)
 
 elif page == "🌱 Carbon Tracking":
     st.markdown("# 🌱 Sustainability & Carbon Metrics")
@@ -850,6 +903,9 @@ elif page == "🔑 Invite Codes":
         st.dataframe(pd.DataFrame(codes_list), use_container_width=True, hide_index=True)
     else:
         st.info("No codes generated yet.")
+
+elif page == "🏢 Company Profile":
+    render_company_profile_page(profile)
 
 elif page == "👥 My Team":
     from my_team import render_my_team

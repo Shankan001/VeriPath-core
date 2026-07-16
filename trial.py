@@ -67,6 +67,20 @@ PRICING_TIERS = {
 # Flat merged dict for backward compatibility
 _ALL_TIERS = {**PRICING_TIERS["crops"], **PRICING_TIERS["livestock"]}
 
+def _get_company_module(company_name: str) -> str:
+    """Determine a company's module by checking any of its users' module field."""
+    try:
+        from supabase_db import get_client
+        rows = get_client().table("users").select("module").eq(
+            "company", company_name
+        ).limit(1).execute().data
+        if rows and rows[0].get("module"):
+            return "livestock" if "Livestock" in rows[0]["module"] else "crops"
+    except Exception:
+        pass
+    return "crops"
+
+
 def _get_module(username: str) -> str:
     """Detect module from user profile."""
     try:
@@ -199,8 +213,38 @@ def set_company_subscription(company_name: str, tier: str,
 def list_all_companies(exporters_only: bool = False) -> list[dict]:
     return list_companies(exporters_only=exporters_only)
 
+def _slugify_tier_name(name: str) -> str:
+    return name.lower().replace(" ", "_")
+
+
 def get_module_tiers(module: str = "crops") -> dict:
-    return PRICING_TIERS.get(module, PRICING_TIERS["crops"])
+    """
+    Returns PRICING_TIERS for the given module, with price_kes overridden
+    by live values from platform_settings (admin-editable), falling back
+    to the hardcoded default if a setting row is missing.
+    """
+    base_tiers = PRICING_TIERS.get(module, PRICING_TIERS["crops"])
+    try:
+        from supabase_db import get_client
+        rows = get_client().table("platform_settings").select(
+            "setting_key, setting_value"
+        ).execute().data
+        price_lookup = {r["setting_key"]: r["setting_value"] for r in rows}
+    except Exception:
+        price_lookup = {}
+
+    result = {}
+    for tier_name, tier_data in base_tiers.items():
+        key = f"price_{module}_{_slugify_tier_name(tier_name)}_kes"
+        live_price = price_lookup.get(key)
+        merged = dict(tier_data)
+        if live_price is not None:
+            try:
+                merged["price_kes"] = float(live_price)
+            except (ValueError, TypeError):
+                pass  # keep hardcoded default if the stored value is invalid
+        result[tier_name] = merged
+    return result
 
 def render_trial_banner(username: str, role: str = "exporter", module: str = None):
     import streamlit as st
