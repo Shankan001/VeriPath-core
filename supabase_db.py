@@ -124,6 +124,24 @@ def update_company_tier(company_name: str, tier: str,
         print(f"[DB] update_company_tier error: {e}")
         return False
 
+def update_company_profile(company_name: str, exporter_kra_pin: str = None,
+                            afa_license_number: str = None) -> bool:
+    try:
+        key = _company_key(company_name)
+        updates = {}
+        if exporter_kra_pin is not None:
+            updates["exporter_kra_pin"] = exporter_kra_pin.strip()
+        if afa_license_number is not None:
+            updates["afa_license_number"] = afa_license_number.strip()
+        if not updates:
+            return True
+        get_client().table("companies").update(updates).eq("company_key", key).execute()
+        return True
+    except Exception as e:
+        print(f"[DB] update_company_profile error: {e}")
+        return False
+
+
 def increment_company_containers(company_name: str) -> int:
     try:
         key = _company_key(company_name)
@@ -345,14 +363,27 @@ def load_consignments_db(company: str = None) -> list[dict]:
         print(f"[DB] load_consignments error: {e}")
         return []
 
-def save_consignment_db(record: dict) -> bool:
-    try:
-        record.pop("id", None)
-        get_client().table("consignments").insert(record).execute()
-        return True
-    except Exception as e:
-        print(f"[DB] save_consignment error: {e}")
-        return False
+def save_consignment_db(record: dict, max_retries: int = 3) -> bool:
+    import time
+    record.pop("id", None)
+    last_error = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            get_client().table("consignments").insert(record).execute()
+            return True
+        except Exception as e:
+            last_error = e
+            error_str = str(e).lower()
+            # Only retry on transient network/SSL issues, not real data errors
+            # (e.g. bad column, constraint violation) which would just fail again
+            is_transient = any(k in error_str for k in ["ssl", "eof", "timeout", "connection"])
+            if is_transient and attempt < max_retries:
+                print(f"[DB] save_consignment transient error (attempt {attempt}/{max_retries}): {e} — retrying...")
+                time.sleep(1.5 * attempt)  # brief backoff before retry
+                continue
+            print(f"[DB] save_consignment error (attempt {attempt}/{max_retries}): {e}")
+            return False
+    return False
 
 def clear_company_consignments_db(company: str) -> int:
     try:
