@@ -29,7 +29,8 @@ def register_user(username: str, password: str,
                   full_name: str, company: str,
                   role: str = "exporter",
                   invite_code: str = "",
-                  module: str = "🌿 VeriPath Crops") -> tuple[bool, str]:
+                  module: str = "🌿 VeriPath Crops",
+                  phone: str = "") -> tuple[bool, str]:
 
     # ── Sanitize inputs ────────────────────────────────────────
     valid_u, username, err_u = sanitize_username(username)
@@ -43,6 +44,10 @@ def register_user(username: str, password: str,
     full_name = full_name.strip()[:100]
     if not full_name:
         return False, "Full name is required."
+    from phone_utils import normalize_kenyan_phone
+    normalized_phone = normalize_kenyan_phone(phone)
+    if not normalized_phone:
+        return False, "A valid phone number is required (e.g. 07XXXXXXXX)."
 
     # ── Password strength ──────────────────────────────────────
     valid_p, err_p = validate_password_strength(password)
@@ -89,6 +94,7 @@ def register_user(username: str, password: str,
         "invite_code_used":  invite_code.strip().upper(),
         "subscription_tier": "trial",
         "containers_used":   0,
+        "phone":             normalized_phone,
     })
     if not ok:
         return False, "Failed to save user. Please try again."

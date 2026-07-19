@@ -225,6 +225,40 @@ if not st.session_state["authenticated"]:
             username = st.text_input("Username", placeholder="your username")
             password = st.text_input("Password", type="password", placeholder="••••••••")
             submit   = st.form_submit_button("Sign In →", use_container_width=True)
+
+        with st.expander("🔒 Forgot your password?"):
+            from password_reset import request_password_reset, verify_and_reset_password
+
+            st.markdown("**Step 1: Request a reset code**")
+            reset_username = st.text_input("Your username", key="reset_username_input")
+            if st.button("📱 Send Reset Code via SMS", key="send_reset_code_btn"):
+                if not reset_username.strip():
+                    st.error("Please enter your username.")
+                else:
+                    ok, msg = request_password_reset(reset_username)
+                    if ok:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+
+            st.markdown("---")
+            st.markdown("**Step 2: Enter the code + new password**")
+            reset_code = st.text_input("6-digit code from SMS", key="reset_code_input", max_chars=6)
+            new_pw = st.text_input("New password", type="password", key="reset_new_pw",
+                                    placeholder="Min. 10 chars · Upper · Lower · Number · Special (@#$!)")
+            new_pw2 = st.text_input("Confirm new password", type="password", key="reset_new_pw2")
+            if st.button("✅ Reset Password", key="confirm_reset_btn"):
+                if not reset_username.strip() or not reset_code.strip():
+                    st.error("Enter your username and the code sent to your phone.")
+                elif new_pw != new_pw2:
+                    st.error("Passwords do not match.")
+                else:
+                    ok, msg = verify_and_reset_password(reset_username, reset_code, new_pw)
+                    if ok:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+
         if submit:
             if not username or not password:
                 st.error("❌ Please enter both username and password.")
@@ -290,6 +324,8 @@ if not st.session_state["authenticated"]:
                 with col1:
                     full_name = st.text_input("Full Name *", placeholder="Joseph Memusi")
                     username  = st.text_input("Username *",  placeholder="josephm")
+                    phone     = st.text_input("Phone Number *", placeholder="0712345678",
+                                               help="Used for password reset via SMS.")
                 with col2:
                     role = st.selectbox("Role", reg_roles)
                     # Farmers are individuals — no company
@@ -339,6 +375,7 @@ if not st.session_state["authenticated"]:
                 errors = []
                 if not full_name.strip():              errors.append("Full Name is required")
                 if not username.strip():               errors.append("Username is required")
+                if not phone.strip():                  errors.append("Phone number is required")
                 if not company.strip():                errors.append("Company is required")
                 if not invite_code.strip():            errors.append("Invite code is required")
                 if not password:                       errors.append("Password is required")
@@ -350,7 +387,7 @@ if not st.session_state["authenticated"]:
                 else:
                     ok, msg = register_user(
                         username, password, full_name, company,
-                        role, invite_code, module=selected_module
+                        role, invite_code, module=selected_module, phone=phone
                     )
                     if ok:
                         st.success(f"✅ {msg} You can now sign in.")
