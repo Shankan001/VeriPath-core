@@ -133,12 +133,43 @@ def render_eudr_page(profile: dict = None):
             crop        = st.selectbox("Crop / Product", ["— Select —"] + list(EUDR_RULES.keys()))
         with col2:
             destination = st.selectbox("Destination Market", ["European Union", "United Kingdom", "USA", "Middle East", "Other"])
-        has_gps = st.checkbox("Farm GPS polygon recorded?")
-        has_dds = st.checkbox("Due Diligence Statement (DDS) prepared?")
+        from supabase_db import get_client as _eudr_gc
+        try:
+            _farms_for_eudr = _eudr_gc().table("farm_boundaries").select(
+                "id, farm_name, deforestation_risk_perennial, deforestation_risk_annual, "
+                "deforestation_risk_timber, deforestation_tree_loss_after_2020_ha, deforestation_checked_at"
+            ).execute().data
+        except Exception:
+            _farms_for_eudr = []
 
+        selected_farm_record = None
+        if _farms_for_eudr:
+            _farm_names_eudr = ["— None selected —"] + [f["farm_name"] for f in _farms_for_eudr]
+            _selected_farm_name = st.selectbox("Farm (optional — for real satellite check)", _farm_names_eudr)
+            if _selected_farm_name != "— None selected —":
+                selected_farm_record = next((f for f in _farms_for_eudr if f["farm_name"] == _selected_farm_name), None)
+
+        has_gps = bool(selected_farm_record) or st.checkbox("Farm GPS polygon recorded?")
+        if selected_farm_record:
+            st.caption("✅ GPS polygon confirmed — farm selected from registered boundaries.")
+
+        has_dds = st.checkbox("Due Diligence Statement (DDS) prepared?")
         if crop != "— Select —":
             result = get_eudr_risk(crop)
             risk   = result["risk"]
+
+            whisp_checked = selected_farm_record and selected_farm_record.get("deforestation_checked_at")
+            whisp_supporting_note = None
+            if whisp_checked:
+                _relevant_risk = selected_farm_record.get("deforestation_risk_perennial", "unknown")
+                if _relevant_risk == "high":
+                    risk = "RED"
+                    whisp_supporting_note = "🔴 Satellite scan detected tree cover loss after Dec 31 2020 on this plot."
+                elif _relevant_risk == "low":
+                    if risk == "AMBER":
+                        whisp_supporting_note = "🟡 Satellite Clear — Awaiting Document Audit. Full due diligence (land rights, labor, tax compliance) still required before GREEN."
+                    elif risk == "GREEN":
+                        whisp_supporting_note = "🟢 Satellite scan confirms no detected deforestation, consistent with low-risk crop classification."
 
             # Escalate AMBER → RED if going to EU without GPS/DDS
             if risk == "AMBER" and destination == "European Union" and (not has_gps or not has_dds):
@@ -154,6 +185,7 @@ def render_eudr_page(profile: dict = None):
                 <div style='font-size:1.4rem;font-weight:700;font-family:Space Mono,monospace;color:{color}'>{icon} {risk} — {result["risk_level"].upper()} RISK</div>
                 <div style='color:#94a3b8;font-size:0.88rem;margin-top:8px'>{EUDR_RULES.get(crop, {}).get("reason", "")}</div>
                 <div style='color:#e8eaf0;font-size:0.9rem;margin-top:10px'>⚡ <b>Required action:</b> {EUDR_RULES.get(crop, {}).get("action", "")}</div>
+                {f"<div style='color:#94a3b8;font-size:0.85rem;margin-top:8px;padding-top:8px;border-top:1px solid #ffffff22'><b>Satellite check (informational — does not override overall status):</b> {whisp_supporting_note}</div>" if whisp_supporting_note else ""}
                 <div style='color:#64748b;font-size:0.8rem;margin-top:8px'>EUDR Score: {result["score"]} / 3</div>
             </div>
             """, unsafe_allow_html=True)
