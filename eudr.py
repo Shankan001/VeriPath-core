@@ -136,9 +136,18 @@ def render_eudr_page(profile: dict = None):
         from supabase_db import get_client as _eudr_gc
         try:
             _farms_for_eudr = _eudr_gc().table("farm_boundaries").select(
-                "id, farm_name, deforestation_risk_perennial, deforestation_risk_annual, "
+                "id, farm_name, farmer_id, deforestation_risk_perennial, deforestation_risk_annual, "
                 "deforestation_risk_timber, deforestation_tree_loss_after_2020_ha, deforestation_checked_at"
             ).execute().data
+
+            if company:
+                _company_norm_eudr = company.strip().lower()
+                _farmer_rows_eudr = _eudr_gc().table("farmers").select("farmer_id, company").execute().data
+                _allowed_farmer_ids_eudr = {
+                    f["farmer_id"] for f in _farmer_rows_eudr
+                    if f.get("company", "").strip().lower() == _company_norm_eudr
+                }
+                _farms_for_eudr = [f for f in _farms_for_eudr if f.get("farmer_id") in _allowed_farmer_ids_eudr]
         except Exception:
             _farms_for_eudr = []
 

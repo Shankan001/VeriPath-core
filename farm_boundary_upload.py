@@ -289,8 +289,17 @@ def render_farm_boundary_upload_page(profile: dict):
     )
     try:
         _boundaries_for_check = supabase.table("farm_boundaries").select(
-            "id, farm_name, deforestation_checked_at"
+            "id, farm_name, farmer_id, deforestation_checked_at"
         ).execute().data
+
+        if company:
+            _company_norm_check = company.strip().lower()
+            _farmer_rows_check = supabase.table("farmers").select("farmer_id, company").execute().data
+            _allowed_farmer_ids_check = {
+                f["farmer_id"] for f in _farmer_rows_check
+                if f.get("company", "").strip().lower() == _company_norm_check
+            }
+            _boundaries_for_check = [b for b in _boundaries_for_check if b.get("farmer_id") in _allowed_farmer_ids_check]
     except Exception:
         _boundaries_for_check = []
 
