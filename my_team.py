@@ -18,7 +18,7 @@ def render_my_team(profile: dict):
         st.markdown("### Generate Farmer Invite Code")
 
         if st.button("Generate VP-FAR Code", type="primary", use_container_width=True):
-            code = generate_invite_code("farmer", created_by=username)
+            code = generate_invite_code("farmer", created_by=username, target_company=company)
             st.session_state["rk_far_code"] = code
             st.rerun()
 
@@ -80,6 +80,27 @@ def render_my_team(profile: dict):
             )
 
         st.markdown("---")
+        st.markdown("### Sign Up a Farmer On the Spot")
+        st.caption("Met a farmer in the field? Generate their code right here.")
+
+        if st.button("Generate VP-FAR Code", type="primary", use_container_width=True, key="co_far_btn"):
+            far_code = generate_invite_code("farmer", created_by=username, target_company=company)
+            st.session_state["co_far_code"] = far_code
+            st.rerun()
+
+        if st.session_state.get("co_far_code"):
+            fc = st.session_state["co_far_code"]
+            st.code(fc, language=None)
+            wa_link2 = f"https://wa.me/?text=Hello,+your+VeriPath+farmer+code+is:+{fc}"
+            st.markdown(
+                f"<a href='{wa_link2}' target='_blank' style='"
+                "background:#16a34a;color:white;padding:9px 20px;border-radius:7px;"
+                "font-size:0.85rem;font-weight:700;text-decoration:none;"
+                "display:inline-block;margin-top:6px'>Send via WhatsApp</a>",
+                unsafe_allow_html=True
+            )
+
+        st.markdown("---")
         st.markdown("### Record Keepers")
         all_users     = load_users()
         company_lower = company.strip().lower()
@@ -102,11 +123,12 @@ def render_my_team(profile: dict):
         st.markdown("---")
         st.markdown("### Add Team Member")
 
-        role_options = ["record_keeper", "compliance_officer", "agronomist"]
+        role_options = ["record_keeper", "compliance_officer", "agronomist", "farmer"]
         role_labels  = {
             "record_keeper":      "Record Keeper",
             "compliance_officer": "Compliance Officer",
             "agronomist":         "Agronomist",
+            "farmer":             "Farmer",
         }
         col_r, col_g = st.columns([2, 1])
         with col_r:
@@ -115,7 +137,7 @@ def render_my_team(profile: dict):
         with col_g:
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("Generate Code", type="primary", use_container_width=True):
-                code = generate_invite_code(team_role, created_by=username)
+                code = generate_invite_code(team_role, created_by=username, target_company=company)
                 st.session_state["exp_team_code"] = code
                 st.rerun()
 
@@ -148,6 +170,49 @@ def render_my_team(profile: dict):
         else:
             st.info("No team members yet.")
 
+    elif role == "agronomist":
+        st.markdown("# My Farmers")
+        st.caption("Generate VP-FAR invite codes for farmers you meet in the field.")
+        st.markdown("---")
+        st.markdown("### Generate Farmer Invite Code")
+
+        if st.button("Generate VP-FAR Code", type="primary", use_container_width=True, key="agr_far_btn"):
+            agr_code = generate_invite_code("farmer", created_by=username, target_company=company)
+            st.session_state["agr_far_code"] = agr_code
+            st.rerun()
+
+        if st.session_state.get("agr_far_code"):
+            afc = st.session_state["agr_far_code"]
+            st.code(afc, language=None)
+            wa_link3 = f"https://wa.me/?text=Hello,+your+VeriPath+farmer+code+is:+{afc}"
+            st.markdown(
+                f"<a href='{wa_link3}' target='_blank' style='"
+                "background:#16a34a;color:white;padding:9px 20px;border-radius:7px;"
+                "font-size:0.85rem;font-weight:700;text-decoration:none;"
+                "display:inline-block;margin-top:6px'>Send via WhatsApp</a>",
+                unsafe_allow_html=True
+            )
+
+        st.markdown("---")
+        st.markdown("### Farmers You Registered")
+        all_farmers = load_farmers(company)
+        my_farmers  = {fid: f for fid, f in all_farmers.items()
+                       if f.get("registered_by","") == username}
+        if my_farmers:
+            rows = []
+            for fid, f in my_farmers.items():
+                rows.append({
+                    "ID":         fid,
+                    "Name":       f["name"],
+                    "County":     f["county"],
+                    "Crops":      ", ".join(f.get("crops",[])),
+                    "GPS":        f.get("gps","—"),
+                    "Geo Status": f.get("geo_status","—"),
+                    "Registered": f["registered_at"][:10],
+                })
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        else:
+            st.info("You have not registered any farmers yet.")
     else:
         st.error("Access restricted.")
         st.stop()

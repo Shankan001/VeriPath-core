@@ -103,6 +103,30 @@ def save_boundary(supabase, farm_name, farmer_id, outgrower_block_id, geojson_di
         return {"success": False, "error": str(e)}
 
 
+def estimate_area_hectares(points: list) -> float:
+    """Rough planar-projection area estimate for PRE-SAVE size classification
+    only. NOT the authoritative area — that's ST_Area(boundary::geography)
+    via the calculate_farm_area() DB trigger, which is already geodetically
+    correct. This just needs to be good enough to flag small plots before
+    the user saves."""
+    import math
+    if len(points) < 3:
+        return 0.0
+    lat0 = sum(p["lat"] for p in points) / len(points)
+    lat0_rad = math.radians(lat0)
+    m_per_deg_lat = 111320.0
+    m_per_deg_lon = 111320.0 * math.cos(lat0_rad)
+    xy = [(p["lon"] * m_per_deg_lon, p["lat"] * m_per_deg_lat) for p in points]
+    n = len(xy)
+    area_m2 = 0.0
+    for i in range(n):
+        x1, y1 = xy[i]
+        x2, y2 = xy[(i + 1) % n]
+        area_m2 += (x1 * y2) - (x2 * y1)
+    area_m2 = abs(area_m2) / 2.0
+    return area_m2 / 10000.0
+
+
 def render_farm_boundary_upload_page(profile: dict):
     st.markdown("# 🛰 Farm Boundary Registration")
     st.markdown(
@@ -252,6 +276,26 @@ def render_farm_boundary_upload_page(profile: dict):
             } for i, p in enumerate(points)]
             st.dataframe(pd.DataFrame(display_rows), use_container_width=True, hide_index=True)
 
+        SMALL_PLOT_THRESHOLD_HA = 0.5
+        COARSE_ACCURACY_M = 7.0
+        est_area_w = estimate_area_hectares(points) if len(points) >= 3 else 0.0
+        max_accuracy_w = max((p.get("accuracy") or 0) for p in points) if points else 0
+        small_plot_risk_w = (0 < est_area_w < SMALL_PLOT_THRESHOLD_HA) and (max_accuracy_w > COARSE_ACCURACY_M)
+
+        gps_override_w = True
+        if small_plot_risk_w:
+            st.warning(
+                f"⚠ **Precision risk**: estimated area ~{est_area_w:.2f} ha with GPS accuracy as coarse as "
+                f"±{max_accuracy_w:.0f}m. On a plot this small, that error can be a large fraction of the true "
+                f"boundary — affecting recorded area, NDVI sampling, and deforestation-risk reliability.\n\n"
+                f"**Before saving, try:** capturing more points (especially at every corner), moving to open "
+                f"sky away from trees/buildings, or waiting a moment for the GPS fix to improve."
+            )
+            gps_override_w = st.checkbox(
+                "I understand this area may be imprecise — save anyway",
+                key="gps_override_walk"
+            )
+
         if st.button("✅ Finish Boundary & Save", type="primary", use_container_width=True, key="save_walk"):
             if not farm_name_w:
                 st.error("❌ Farm name is required.")
@@ -261,6 +305,9 @@ def render_farm_boundary_upload_page(profile: dict):
                 st.stop()
             if len(points) < 3:
                 st.error(f"❌ Need at least 3 points — you have {len(points)}.")
+                st.stop()
+            if small_plot_risk_w and not gps_override_w:
+                st.error("❌ Confirm the precision warning checkbox above before saving, or capture more/better points.")
                 st.stop()
             if check_duplicate(supabase, selected_farmer_id_w, farm_name_w):
                 st.error(f"❌ **{farm_name_w}** already has a saved boundary for this farmer. Use a different farm name.")
@@ -345,6 +392,8 @@ def render_farm_boundary_upload_page(profile: dict):
         farms = supabase.table("farm_boundaries").select(
             "id, farm_name, farmer_id, outgrower_block_id, area_hectares, created_at"
         ).order("created_at", desc=True).execute().data
+        _allowed_farmer_ids = {f["farmer_id"] for f in farmers_result}
+        farms = [f for f in farms if f.get("farmer_id") in _allowed_farmer_ids]
     except Exception as e:
         st.error(f"Could not load boundaries: {str(e)}")
         farms = []

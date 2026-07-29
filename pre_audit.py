@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from ledger_db import load_ledger, save_full_ledger, update_ledger_record_by_id
+from mrl_phi import check_phi_violations
 from datetime import datetime, timezone
 import os, json
 
@@ -10,7 +11,7 @@ REQUIRED_FIELDS = ["farmer_id","farmer_name","county","crop",
 EUDR_NEEDS_GPS  = ["Coffee","Tea","Maize"]
 
 def run_audit(records: list) -> dict:
-    passed, eudr_flags, missing_flags = [], [], []
+    passed, eudr_flags, missing_flags, phi_flags = [], [], [], []
     for r in records:
         issues = []
         for field in REQUIRED_FIELDS:
@@ -21,9 +22,15 @@ def run_audit(records: list) -> dict:
             issues.append(f"EUDR: GPS missing for {r['crop']}")
         if r.get("eudr_risk","") in ("AMBER","RED"):
             issues.append(f"EUDR: {r['eudr_risk']} risk — Due Diligence required")
+        phi_issues = check_phi_violations(
+            r.get("farmer_id",""), r.get("crop",""), r.get("intake_date","")
+        )
+        issues.extend(phi_issues)
         if issues:
             flagged = {**r, "audit_issues": issues, "audit_status": "flagged"}
-            if any("EUDR" in i for i in issues):
+            if any("MRL/PHI" in i for i in issues):
+                phi_flags.append(flagged)
+            elif any("EUDR" in i for i in issues):
                 eudr_flags.append(flagged)
             else:
                 missing_flags.append(flagged)
@@ -34,8 +41,9 @@ def run_audit(records: list) -> dict:
         "passed":        len(passed),
         "eudr_flags":    eudr_flags,
         "missing_flags": missing_flags,
+        "phi_flags":     phi_flags,
         "clean_records": passed,
-        "all_clean":     len(eudr_flags) == 0 and len(missing_flags) == 0,
+        "all_clean":     len(eudr_flags) == 0 and len(missing_flags) == 0 and len(phi_flags) == 0,
         "run_at":        datetime.now().isoformat(),
     }
 
@@ -98,7 +106,7 @@ def render_pre_audit_page(profile: dict):
                     "audit_failure_reason": None,
                     "flagged_for_approval": False,
                 })
-        for r in (result["eudr_flags"] + result["missing_flags"]):
+        for r in (result["eudr_flags"] + result["missing_flags"] + result["phi_flags"]):
             if r.get("id"):
                 update_ledger_record_by_id(r["id"], {
                     "audit_status": "flagged",
@@ -112,7 +120,7 @@ def render_pre_audit_page(profile: dict):
 
     result = st.session_state["audit_result"]
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.markdown(f"""<div class='metric-card'>
             <div class='metric-label'>Total</div>
@@ -135,9 +143,24 @@ def render_pre_audit_page(profile: dict):
             <div class='metric-label'>🔴 Missing</div>
             <div class='metric-value' style='color:{"#f87171" if mc else "#4ade80"}'>{mc}</div></div>""",
             unsafe_allow_html=True)
+    with col5:
+        pc = len(result["phi_flags"])
+        st.markdown(f"""<div class='metric-card' style='border-color:{"#a855f7" if pc else "#16a34a"}'>
+            <div class='metric-label'>☠ MRL/PHI</div>
+            <div class='metric-value' style='color:{"#c084fc" if pc else "#4ade80"}'>{pc}</div></div>""",
+            unsafe_allow_html=True)
 
     st.markdown("---")
 
+    for r in result["phi_flags"]:
+        st.markdown(f"""
+        <div style='background:#1a0a20;border:1px solid #a855f7;border-radius:8px;
+                    padding:12px 16px;margin-bottom:8px'>
+            <b style='color:#c084fc'>{r.get("farmer_name","—")}</b>
+            · {r.get("crop","—")} · {r.get("weight_kg","—")} kg<br>
+            <span style='color:#e9d5ff;font-size:0.85rem'>
+                {"<br>".join(r.get("audit_issues",[]))}</span>
+        </div>""", unsafe_allow_html=True)
     for r in result["eudr_flags"]:
         st.markdown(f"""
         <div style='background:#1a1400;border:1px solid #d97706;border-radius:8px;
@@ -256,7 +279,8 @@ def render_pre_audit_page(profile: dict):
                     st.error("Override reason required.")
                 else:
                     all_records = (result["clean_records"] +
-                                   result["eudr_flags"] + result["missing_flags"])
+                                   result["eudr_flags"] + result["missing_flags"] +
+                                   result["phi_flags"])
                     st.session_state["batch_approved"]   = True
                     st.session_state["approved_records"] = all_records
                     st.warning(f"⚠ Override by {profile['full_name']}: {override_reason}")

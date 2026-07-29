@@ -34,7 +34,7 @@ MODULE_ROLE_MAP = {
     ],
 }
 
-def generate_invite_code(role: str, created_by: str = "admin") -> str:
+def generate_invite_code(role: str, created_by: str = "admin", target_company: str = None) -> str:
     if role not in ROLE_PREFIXES:
         raise ValueError(f"Invalid role: {role}")
     prefix   = ROLE_PREFIXES[role]
@@ -44,24 +44,24 @@ def generate_invite_code(role: str, created_by: str = "admin") -> str:
         code   = f"{prefix}-{suffix}"
         if code not in existing:
             break
-    save_invite_code(code, role, created_by)
+    save_invite_code(code, role, created_by, target_company=target_company)
     return code
 
-def validate_invite_code(code: str) -> tuple[bool, str, str | None]:
+def validate_invite_code(code: str) -> tuple[bool, str, str | None, str | None]:
     code  = code.strip().upper()
     parts = code.split("-")
     if len(parts) != 3 or parts[0] != "VP" or len(parts[2]) != 4:
-        return False, "Invalid code format. Expected VP-XXX-XXXX.", None
+        return False, "Invalid code format. Expected VP-XXX-XXXX.", None, None
     prefix = f"VP-{parts[1]}"
     if prefix not in ROLE_PREFIXES.values():
-        return False, f"Unknown role prefix '{parts[1]}'.", None
+        return False, f"Unknown role prefix '{parts[1]}'.", None, None
     entry = get_invite_code(code)
     if not entry:
-        return False, "Invite code not found. Contact your administrator.", None
+        return False, "Invite code not found. Contact your administrator.", None, None
     if entry.get("used"):
-        return False, f"This code was already used by {entry.get('used_by','someone')}.", None
+        return False, f"This code was already used by {entry.get('used_by','someone')}.", None, None
     role = next(r for r, p in ROLE_PREFIXES.items() if p == prefix)
-    return True, "Valid invite code.", role
+    return True, "Valid invite code.", role, entry.get("target_company")
 
 def consume_invite_code(code: str, username: str) -> bool:
     return consume_invite_code_db(code.strip().upper(), username)
@@ -88,7 +88,7 @@ def list_invite_codes() -> list[dict]:
     return sorted(result, key=lambda x: x["Created At"], reverse=True)
 
 def get_role_from_code(code: str) -> str | None:
-    valid, _, role = validate_invite_code(code)
+    valid, _, role, _ = validate_invite_code(code)
     return role if valid else None
 
 def seed_admin_code() -> str | None:

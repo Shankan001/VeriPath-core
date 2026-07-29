@@ -193,16 +193,17 @@ def load_invite_codes() -> dict:
         print(f"[DB] load_invite_codes error: {e}")
         return {}
 
-def save_invite_code(code: str, role: str, created_by: str) -> bool:
+def save_invite_code(code: str, role: str, created_by: str, target_company: str = None) -> bool:
     try:
         get_client().table("invite_codes").insert({
-            "code":       code,
-            "role":       role,
-            "created_by": created_by,
-            "created_at": _now(),
-            "used":       False,
-            "used_by":    None,
-            "used_at":    None,
+            "code":           code,
+            "role":           role,
+            "created_by":     created_by,
+            "target_company": target_company,
+            "created_at":     _now(),
+            "used":           False,
+            "used_by":        None,
+            "used_at":        None,
         }).execute()
         return True
     except Exception as e:
@@ -448,6 +449,43 @@ def save_kpi_overrides(cac_kes: int, churn_rate_pct: float) -> bool:
         return False
 
 # ── CONNECTION TEST ───────────────────────────────────────────────────────
+
+def upload_activity_photo(file_bytes: bytes, company: str, farmer_id: str, activity_key: str) -> str | None:
+    """Uploads a farm activity photo to the private 'farm-activity-photos'
+    Storage bucket. Returns the storage PATH (not a public URL — the bucket
+    is private; call get_signed_activity_photo_url() to view it)."""
+    from datetime import datetime as _dt
+    import re
+    try:
+        safe_farmer_id = re.sub(r"[^A-Za-z0-9_-]", "_", farmer_id or "unknown")
+        safe_company   = re.sub(r"[^A-Za-z0-9_-]", "_", company or "unknown")
+        timestamp = _dt.utcnow().strftime("%Y%m%d_%H%M%S%f")
+        path = f"{safe_company}/{safe_farmer_id}/{activity_key}_{timestamp}.jpg"
+        get_client().storage.from_("farm-activity-photos").upload(
+            path, file_bytes, {"content-type": "image/jpeg"}
+        )
+        return path
+    except Exception as e:
+        print(f"[Storage] upload_activity_photo error: {e}")
+        return None
+
+
+def get_signed_activity_photo_url(photo_path: str, expires_in: int = 3600) -> str | None:
+    """Generates a time-limited signed URL for a private activity photo.
+    Call this ONLY for photo_paths already confirmed to belong to a
+    company-scoped, permitted record — this function itself does no
+    company checking, same as every other raw table read in this file."""
+    if not photo_path:
+        return None
+    try:
+        result = get_client().storage.from_("farm-activity-photos").create_signed_url(
+            photo_path, expires_in
+        )
+        return result.get("signedURL") or result.get("signedUrl") or result.get("signed_url")
+    except Exception as e:
+        print(f"[Storage] get_signed_activity_photo_url error: {e}")
+        return None
+
 
 def test_connection() -> bool:
     try:

@@ -59,7 +59,7 @@ def register_user(username: str, password: str,
         return False, "An invite code is required to register."
 
     from invite_codes import validate_invite_code, consume_invite_code
-    code_ok, code_msg, code_role = validate_invite_code(
+    code_ok, code_msg, code_role, code_target_company = validate_invite_code(
         invite_code.strip().upper()
     )
     if not code_ok:
@@ -70,6 +70,22 @@ def register_user(username: str, password: str,
     if code_role != role:
         return False, (f"Invite code is for '{code_role}' role, "
                        f"but you selected '{role}'.")
+
+    # ── Farmer company resolution ───────────────────────────────
+    # A farmer's company is NOT self-declared — it comes from whichever
+    # company generated the invite code they're using. This keeps farmer
+    # data correctly isolated per company (same principle as every other
+    # company-scoped read/write in this app). If target_company is blank,
+    # it means the code was deliberately created as an "independent farmer"
+    # code (admin-only checkbox) — the farmer becomes their own tenant,
+    # explicitly, not by silent default.
+    if role == "farmer":
+        if code_target_company and code_target_company.strip():
+            valid_c, company, err_c = sanitize_company(code_target_company)
+            if not valid_c:
+                company = code_target_company.strip()
+        else:
+            company = full_name.strip() or "Individual"
 
     # ── Duplicate check ────────────────────────────────────────
     existing = get_user(username)

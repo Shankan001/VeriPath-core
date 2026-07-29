@@ -91,14 +91,14 @@ section[data-testid="stSidebar"] .stRadio label:hover { color: #38bdf8; }
 # ── Module → Role mapping ──────────────────────────────────────────────────
 MODULE_ROLES = {
     "🌿 VeriPath Crops": {
-        "roles": ["record_keeper","agronomist","compliance_officer","exporter","admin"],
-        "invite_prefixes": ["VP-REC","VP-AGR","VP-COM","VP-EXP","VP-ADM"],
+        "roles": ["record_keeper","agronomist","compliance_officer","exporter","admin","farmer"],
+        "invite_prefixes": ["VP-REC","VP-AGR","VP-COM","VP-EXP","VP-ADM","VP-FAR"],
         "badge_color": "#16a34a", "badge_bg": "#071a0f",
         "icon": "🌿", "description": "Export compliance & EUDR traceability",
     },
     "🐄 VeriPath Livestock": {
-        "roles": ["diaspora_owner","veterinarian","farm_manager","admin"],
-        "invite_prefixes": ["VP-DIA","VP-VET","VP-FMG","VP-ADM"],
+        "roles": ["diaspora_owner","veterinarian","farm_manager","admin","herdsman"],
+        "invite_prefixes": ["VP-DIA","VP-VET","VP-FMG","VP-ADM","VP-HRD"],
         "badge_color": "#d97706", "badge_bg": "#1a0f00",
         "icon": "🐄", "description": "Diaspora animal health & biosecurity",
     },
@@ -139,9 +139,9 @@ KRA_PIN_PATTERN = re.compile(r'^[A-Z]\d{9}[A-Z]$')
 
 # ── Role → Pages ───────────────────────────────────────────────────────────
 ROLE_PAGES = {
-    "farmer": ["📸 Farm Activities","📦 My Batches","💰 Payments","🌿 My Farm Profile"],
+    "farmer": ["🌾 My Farm Dashboard"],
     "record_keeper": ["🌿 Outgrower Registry","📦 Packhouse Intake","📥 Data Ingestion","👥 My Team","🆘 Support"],
-    "agronomist": ["🌿 Outgrower Registry","📦 Packhouse Intake"],
+    "agronomist": ["🌿 Outgrower Registry","📦 Packhouse Intake","🔍 Farmer Activity Log","👥 My Team"],
     "compliance_officer": [
         "📥 Data Ingestion","📅 Daily Batch Reports",
         "🔍 Pre-Audit Gate","🧪 Quarantine Desk","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault","🛰 Farm Boundary Upload","🌱 NDVI Crop Health","⛈️ Flash Weather Risk",
@@ -150,14 +150,14 @@ ROLE_PAGES = {
         "📊 Dashboard","📥 Data Ingestion","📑 Consignment Ledger",
         "🌿 Outgrower Registry","📦 Packhouse Intake","📅 Daily Batch Reports",
         "🔍 Pre-Audit Gate","🧪 Quarantine Desk","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault","🛰 Farm Boundary Upload","🌱 NDVI Crop Health","⛈️ Flash Weather Risk",
-        "📡 Transmit to Portals","🌱 Carbon Tracking","🗺 Origin Map",
+        "📡 Transmit to Portals","🌱 Carbon Tracking","🗺 Origin Map","🔍 Farmer Activity Log",
         "🏢 Company Profile","👥 My Team","🆘 Support",
     ],
     "admin": [
         "📊 Dashboard","📥 Data Ingestion","📑 Consignment Ledger",
         "🌿 Outgrower Registry","📦 Packhouse Intake","📅 Daily Batch Reports",
         "🔍 Pre-Audit Gate","🧪 Quarantine Desk","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault","🛰 Farm Boundary Upload","🌱 NDVI Crop Health","⛈️ Flash Weather Risk",
-        "📡 Transmit to Portals","🌱 Carbon Tracking","🗺 Origin Map",
+        "📡 Transmit to Portals","🌱 Carbon Tracking","🗺 Origin Map","🔍 Farmer Activity Log",
         "📈 KPI Dashboard","🔑 Invite Codes","👥 My Team","🗑 Demo Reset",
     ],
     "admin_livestock": [
@@ -644,6 +644,9 @@ elif page == "🌱 NDVI Crop Health":
 elif page == "⛈️ Flash Weather Risk":
     render_weather_risk_dashboard_page(profile)
 
+elif page == "🔍 Farmer Activity Log":
+    from farmer_activity_log import render_farmer_activity_log_page
+    render_farmer_activity_log_page(profile)
 elif page == "📡 Transmit to Portals":
     st.markdown("# 📡 Transmit to Government Portals")
 
@@ -1013,8 +1016,26 @@ elif page == "🔑 Invite Codes":
         new_role = st.selectbox("Role", role_options)
     with col_g:
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("⚡ Generate Code", use_container_width=True, type="primary"):
-            code = generate_invite_code(new_role, created_by=profile["username"])
+        gen_clicked = st.button("⚡ Generate Code", use_container_width=True, type="primary")
+
+    admin_target_company = None
+    admin_is_independent = False
+    if new_role == "farmer":
+        admin_is_independent = st.checkbox(
+            "Independent farmer — no company, gets their own dashboard/access"
+        )
+        if not admin_is_independent:
+            admin_target_company = st.text_input(
+                "Link this farmer's code to which company?",
+                placeholder="VeriPath Africa"
+            )
+
+    if gen_clicked:
+        if new_role == "farmer" and not admin_is_independent and not (admin_target_company or "").strip():
+            st.error("❌ Enter a company to link this farmer code to, or check 'Independent farmer'.")
+        else:
+            tc = None if (new_role != "farmer" or admin_is_independent) else admin_target_company.strip()
+            code = generate_invite_code(new_role, created_by=profile["username"], target_company=tc)
             st.success("✅ New code generated:")
             st.code(code, language=None)
     st.markdown("---")
@@ -1099,9 +1120,9 @@ elif page == "🗺 Origin Map":
         st.info("No data yet.")
         st.map(pd.DataFrame({"lat":[-0.0236],"lon":[37.9062]}), zoom=5)
 
-elif page == "📸 Farm Activities":
-    st.markdown("# 📸 Farm Activities")
-    st.info("Farmer mobile view — coming soon.")
+elif page == "🌾 My Farm Dashboard":
+    from farmer_dashboard import render_farmer_dashboard
+    render_farmer_dashboard(profile)
 
 # ── LIVESTOCK PAGES ────────────────────────────────────────────────────────
 elif page == "📊 Farm Overview":

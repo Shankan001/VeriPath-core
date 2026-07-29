@@ -114,14 +114,19 @@ def check_hcd_auction_breach(supabase, vault_id: str) -> dict:
         return {"status": "flagged", "reason": f"Cross-check error: {str(e)}"}
 
 
-def check_kephis_vs_packhouse(supabase, vault_id: str, parsed_data: dict, consignment_id: str = None) -> dict:
+def check_kephis_vs_packhouse(supabase, vault_id: str, parsed_data: dict, consignment_id: str = None, company: str = None) -> dict:
     cert_weight = parsed_data.get("volume_or_weight")
 
     if consignment_id is None:
         return {"status": "pending", "reason": "No linked consignment provided for weight comparison."}
 
+    if not company or not company.strip():
+        return {"status": "flagged", "reason": "Cannot verify — no company context provided for this check."}
+
     try:
-        consignment = supabase.table("consignments").select("weight_kg").eq("id", consignment_id).single().execute().data
+        consignment = supabase.table("consignments").select("weight_kg, company").eq("id", consignment_id).single().execute().data
+        if not consignment or consignment.get("company", "").strip().lower() != company.strip().lower():
+            return {"status": "flagged", "reason": "Consignment ID does not belong to your company."}
         packhouse_weight = consignment.get("weight_kg")
 
         if cert_weight is None or packhouse_weight is None:
