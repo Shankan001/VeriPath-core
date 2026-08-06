@@ -12,6 +12,19 @@ from typing import Any
 # ── Rate limiting (in-memory per session) ─────────────────────
 _rate_store: dict = {}
 
+import html as _html_module
+
+
+def escape_html(text) -> str:
+    """Escapes a value for safe interpolation into unsafe_allow_html
+    markdown blocks. Use this on ANY user-submitted text (notes, names,
+    free-text fields) before putting it inside an st.markdown(...,
+    unsafe_allow_html=True) f-string."""
+    if text is None:
+        return ""
+    return _html_module.escape(str(text))
+
+
 def check_rate_limit(key: str, max_attempts: int = 5,
                      window_seconds: int = 300) -> tuple[bool, int]:
     """

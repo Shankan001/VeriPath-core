@@ -14,6 +14,7 @@ from certificate_parser import parse_certificate, FIELD_SCHEMAS
 from vault_checks import save_certificate_to_vault
 from kra_origin_pdf import generate_kra_origin_pdf
 from supabase_db import get_client
+from security import escape_html
 
 DOC_TYPE_LABELS = {
     "HCD_EXPORT_LICENCE": "HCD Export Licence",
@@ -116,6 +117,8 @@ def render_certificate_vault_page(profile: dict):
             farm_latitude=farm_lat if doc_type == "KRA_CERTIFICATE_ORIGIN" else None,
             farm_longitude=farm_lon if doc_type == "KRA_CERTIFICATE_ORIGIN" else None,
             outgrower_block_id=outgrower_block_id or None,
+            company=company,
+            consignment_id=consignment_id or None,
         )
 
         if not save_result["success"]:
@@ -132,7 +135,7 @@ def render_certificate_vault_page(profile: dict):
             <div style='color:#94a3b8;margin-top:6px;font-size:0.85rem'>
                 Verification code: <b style='color:#e8eaf0'>{save_result['vp_visa_code']}</b>
             </div>
-            {f"<div style='color:#fbbf24;margin-top:6px;font-size:0.85rem'>{save_result['reason']}</div>" if save_result.get('reason') else ""}
+            {f"<div style='color:#fbbf24;margin-top:6px;font-size:0.85rem'>{escape_html(save_result['reason'])}</div>" if save_result.get('reason') else ""}
         </div>
         """, unsafe_allow_html=True)
 
@@ -143,9 +146,11 @@ def render_certificate_vault_page(profile: dict):
     st.markdown("<div class='section-header'>VAULT RECORDS</div>", unsafe_allow_html=True)
 
     try:
-        records = supabase.table("export_regulatory_vault").select("*").order(
-            "created_at", desc=True
-        ).limit(50).execute().data
+        _role = profile.get("role", "")
+        _q = supabase.table("export_regulatory_vault").select("*")
+        if _role != "admin":
+            _q = _q.eq("company", company)
+        records = _q.order("created_at", desc=True).limit(50).execute().data
     except Exception as e:
         st.error(f"Could not load vault records: {str(e)}")
         records = []

@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 from supabase_db import get_client
 from ndvi_dashboard import classify_ndvi
+from security import escape_html
 
 # ── Activity types farmers can log ───────────────────────────────────────
 ACTIVITY_TYPES = {
@@ -96,7 +97,7 @@ def render_farmer_dashboard(profile: dict):
                 color:white;padding:20px 24px;border-radius:12px;margin-bottom:20px'>
         <div style='font-size:1.3rem;font-weight:700'>Welcome, {name}</div>
         <div style='opacity:0.85;font-size:0.88rem;margin-top:4px'>
-            VeriPath Farmer Portal &nbsp;·&nbsp; {company}
+            VeriPath Farmer Portal &nbsp;·&nbsp; {escape_html(company)}
         </div>
     </div>
     """, unsafe_allow_html=True)

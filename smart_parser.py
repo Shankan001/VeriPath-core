@@ -194,7 +194,13 @@ def rule_based_parse(uploaded_file) -> list:
             except:
                 weight = 0.0
 
-            if not farmer_name or farmer_name in ("nan","None","") or weight <= 0:
+            # Sanity check — a single farmer batch in the tens of thousands of
+            # kg is already generous; anything past that is almost certainly
+            # a parsing artifact (merged cell, stray ID/amount column, etc.),
+            # not a real weight. Reject rather than silently trust a number
+            # just because it parsed without error.
+            MAX_PLAUSIBLE_WEIGHT_KG = 50000
+            if not farmer_name or farmer_name in ("nan","None","") or weight <= 0 or weight > MAX_PLAUSIBLE_WEIGHT_KG:
                 continue
             if not crop or crop == "Nan":
                 crop = "Unknown"

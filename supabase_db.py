@@ -44,6 +44,7 @@ def save_user(username: str, data: dict) -> bool:
             "invite_code_used":  data.get("invite_code_used",""),
             "subscription_tier": data.get("subscription_tier","trial"),
             "containers_used":   data.get("containers_used", 0),
+            "phone":             data.get("phone",""),
         }).execute()
         return True
     except Exception as e:

@@ -1,4 +1,5 @@
 import streamlit as st
+from security import escape_html
 import streamlit.components.v1 as components
 import json
 import os
@@ -172,7 +173,7 @@ def _render_intake(company: str, role: str):
         </div>
         <div style='color:#64748b;font-size:0.8rem;margin-top:4px'>
             GPS: {farmer.get("gps","—")} &nbsp;|&nbsp;
-            Crops: {", ".join(farmer["crops"])}
+            Crops: {", ".join(escape_html(c) for c in farmer["crops"])}
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -266,7 +267,7 @@ def _render_intake(company: str, role: str):
                     &nbsp;·&nbsp; {row["weight_kg"]} kg &nbsp;·&nbsp; {row["grade"]}
                     &nbsp;·&nbsp; HS: <code>{row["hs_code"]}</code>
                     &nbsp;·&nbsp; EUDR: <span style='color:{color};font-weight:700'>{row["eudr_risk"]}</span>
-                    {f'<br><span style="color:#64748b;font-size:0.8rem">{row["notes"]}</span>' if row["notes"] else ""}
+                    {f'<br><span style="color:#64748b;font-size:0.8rem">{escape_html(row["notes"])}</span>' if row["notes"] else ""}
                 </div>
                 """, unsafe_allow_html=True)
             with c2:
@@ -365,9 +366,15 @@ def _render_record_keeper_edit(company: str):
             f"{record.get('weight_kg','—')} kg · {record.get('session_id','—')}"
         ):
             col1, col2, col3 = st.columns(3)
+            _raw_weight = float(record.get("weight_kg", 100) or 100)
+            if _raw_weight > 99999.0:
+                st.warning(f"⚠ Stored weight ({_raw_weight:,.0f} kg) is implausible — clamped for editing. Correct and save to fix the underlying record.")
+                _raw_weight = 99999.0
+            elif _raw_weight < 0.1:
+                _raw_weight = 0.1
             new_weight = col1.number_input(
                 "Weight (kg)", min_value=0.1, max_value=99999.0,
-                value=float(record.get("weight_kg",100)),
+                value=_raw_weight,
                 key=f"edit_weight_{idx}"
             )
             new_grade = col2.selectbox(

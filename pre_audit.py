@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 from ledger_db import load_ledger, save_full_ledger, update_ledger_record_by_id
 from mrl_phi import check_phi_violations
+from security import escape_html
 from datetime import datetime, timezone
 import os, json
 
@@ -231,13 +232,13 @@ def render_pre_audit_page(profile: dict):
                 <div style='font-size:1rem;font-weight:700;color:#38bdf8'>
                     📬 Submission Request from Compliance Officer</div>
                 <div style='color:#94a3b8;font-size:0.85rem;margin-top:6px'>
-                    Flagged by <b style='color:#e8eaf0'>{flag["flagged_by"]}</b>
+                    Flagged by <b style='color:#e8eaf0'>{escape_html(flag["flagged_by"])}</b>
                     · {flag["flagged_at"]}
                 </div>
                 <div style='color:#e8eaf0;margin-top:10px;font-size:0.9rem'>
                     📋 <b>Batch:</b> {flag["audit_date"]} — {flag["packhouse"]}<br>
                     ✅ <b>{flag["passed"]} clean records</b> of {flag["total"]} total<br>
-                    💬 <i>"{flag["note"]}"</i>
+                    💬 <i>"{escape_html(flag["note"])}"</i>
                 </div>
             </div>""", unsafe_allow_html=True)
 

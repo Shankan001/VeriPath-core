@@ -1,6 +1,8 @@
 import hashlib
 import secrets
+import streamlit as st
 from datetime import datetime, timezone
+from security import escape_html
 from supabase_db import (
     get_user, save_user, update_user_login,
     load_users, ensure_company
@@ -31,6 +33,22 @@ def register_user(username: str, password: str,
                   invite_code: str = "",
                   module: str = "🌿 VeriPath Crops",
                   phone: str = "") -> tuple[bool, str]:
+
+    # ── Rate limiting — 5 registration attempts per 5 minutes, per
+    # browser session. NOTE: this is session-scoped, not IP-based, since
+    # this app doesn't currently have reliable access to the real client
+    # IP behind Railway's proxy. It still meaningfully raises the cost of
+    # a naive sequential invite-code brute-force script; it does not stop
+    # a distributed attacker cycling sessions. Worth revisiting with
+    # IP-based limiting if that becomes available.
+    if "_reg_session_token" not in st.session_state:
+        st.session_state["_reg_session_token"] = secrets.token_hex(16)
+    _rate_key = f"register:{st.session_state['_reg_session_token']}"
+    _allowed, _wait = check_rate_limit(_rate_key, max_attempts=5, window_seconds=300)
+    if not _allowed:
+        log_security_event("register_rate_limited", username or "unknown",
+                           f"Blocked for {_wait}s", False)
+        return False, f"Too many registration attempts. Try again in {_wait} seconds."
 
     # ── Sanitize inputs ────────────────────────────────────────
     valid_u, username, err_u = sanitize_username(username)
@@ -119,7 +137,7 @@ def register_user(username: str, password: str,
     ensure_company(company.strip(), created_at=now)
     log_security_event("register_success", username,
                        f"Role: {role} · Module: {module}", True)
-    return True, f"Account created for {full_name}."
+    return True, f"Account created for {escape_html(full_name)}."
 
 def login_user(username: str,
                password: str) -> tuple[bool, str, dict | None]:
@@ -157,7 +175,7 @@ def login_user(username: str,
 
     profile = {k: v for k, v in user.items()
                if k not in ("password","salt")}
-    return True, f"Welcome back, {user['full_name']}.", profile
+    return True, f"Welcome back, {escape_html(user['full_name'])}.", profile
 
 def get_user_count() -> int:
     return len(load_users())

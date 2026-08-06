@@ -198,25 +198,31 @@ def render_kpi_dashboard(profile: dict):
             ])
             st.dataframe(phone_df, use_container_width=True, hide_index=True)
 
-            missing_phone_users = [u["username"] for u in _company_users if not u.get("phone")]
-            if missing_phone_users:
-                st.markdown("**Set a phone number for a user missing one:**")
-                col_ph1, col_ph2 = st.columns([2,2])
-                with col_ph1:
-                    target_user = st.selectbox("User", missing_phone_users, key="phone_backfill_user")
-                with col_ph2:
-                    new_phone_val = st.text_input("Phone number", placeholder="0712345678", key="phone_backfill_input")
-                if st.button("💾 Save Phone Number", key="phone_backfill_save"):
-                    from phone_utils import normalize_kenyan_phone
-                    normalized = normalize_kenyan_phone(new_phone_val)
-                    if not normalized:
-                        st.error("Please enter a valid phone number (e.g. 07XXXXXXXX).")
-                    else:
-                        _gc4().table("users").update({"phone": normalized}).eq("username", target_user).execute()
-                        st.success(f"✅ Phone number saved for {target_user}.")
-                        st.rerun()
-            else:
-                st.success("✅ All users in this company have a phone number on file.")
+            st.markdown("**Set or correct a phone number** (works for missing values and typos/duplicates alike):")
+            _user_lookup = {u["username"]: u for u in _company_users}
+            col_ph1, col_ph2 = st.columns([2,2])
+            with col_ph1:
+                target_user = st.selectbox(
+                    "User",
+                    list(_user_lookup.keys()),
+                    format_func=lambda un: f"{un} ({_user_lookup[un].get('phone') or 'missing'})",
+                    key="phone_backfill_user"
+                )
+            with col_ph2:
+                _current = _user_lookup[target_user].get("phone", "")
+                new_phone_val = st.text_input(
+                    "Phone number", value=_current or "",
+                    placeholder="0712345678", key=f"phone_backfill_input_{target_user}"
+                )
+            if st.button("💾 Save Phone Number", key="phone_backfill_save"):
+                from phone_utils import normalize_kenyan_phone
+                normalized = normalize_kenyan_phone(new_phone_val)
+                if not normalized:
+                    st.error("Please enter a valid phone number (e.g. 07XXXXXXXX).")
+                else:
+                    _gc4().table("users").update({"phone": normalized}).eq("username", target_user).execute()
+                    st.success(f"✅ Phone number updated for {target_user}.")
+                    st.rerun()
         else:
             st.info("No users found for this company.")
     else:

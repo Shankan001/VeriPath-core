@@ -5,6 +5,7 @@ unseasonal rainfall) per farm, plus SMS delivery status.
 """
 
 import streamlit as st
+from security import escape_html
 import pandas as pd
 from supabase_db import get_client
 
@@ -106,7 +107,7 @@ def render_weather_risk_dashboard_page(profile: dict):
             st.markdown(
                 f"<div style='background:{color}15;border-left:4px solid {color};padding:12px;"
                 f"border-radius:6px;margin-bottom:8px'>"
-                f"<div style='font-weight:700'>{icon} {farm_name} — {e['risk_type'].replace('_',' ').title()} "
+                f"<div style='font-weight:700'>{icon} {escape_html(farm_name)} — {e['risk_type'].replace('_',' ').title()} "
                 f"<span style='color:{color}'>({badge})</span></div>"
                 f"<div style='color:#94a3b8;font-size:13px'>{e['created_at'][:16].replace('T',' ')} · "
                 f"Forecast value: {e['forecast_value']} · {sms_status}</div>"

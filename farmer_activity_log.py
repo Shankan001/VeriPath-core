@@ -1,6 +1,7 @@
 import streamlit as st
 from supabase_db import get_client, get_signed_activity_photo_url
 from farmer_dashboard import ACTIVITY_TYPES
+from security import escape_html
 
 
 def get_scoped_farmers_for_log(supabase, company: str) -> list:
@@ -115,9 +116,9 @@ def render_farmer_activity_log_page(profile: dict):
             <div style='font-weight:700;color:#e8eaf0'>{act_cfg['icon']} {act_cfg['label']} — {a.get('date','—')}</div>
             <div style='color:#94a3b8;font-size:0.85rem;margin-top:4px'>
                 Crop: {a.get('crop','—')} · Plot: {a.get('plot_area_ha','—')} ha
-                {' · Chemicals: ' + ', '.join(chemicals) if chemicals else ''}
+                {' · Chemicals: ' + ', '.join(escape_html(c) for c in chemicals) if chemicals else ''}
             </div>
-            {f"<div style='color:#cbd5e1;font-size:0.85rem;margin-top:6px'>{a.get('notes','')}</div>" if a.get('notes') else ''}
+            {f"<div style='color:#cbd5e1;font-size:0.85rem;margin-top:6px'>{escape_html(a.get('notes',''))}</div>" if a.get('notes') else ''}
         </div>
         """, unsafe_allow_html=True)
 

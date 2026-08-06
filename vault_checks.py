@@ -23,7 +23,8 @@ def generate_vp_visa_code() -> str:
 def save_certificate_to_vault(supabase, document_type: str, parsed_data: dict,
                                raw_text: str, file_name: str, uploaded_by: str,
                                farm_latitude: float = None, farm_longitude: float = None,
-                               outgrower_block_id: str = None) -> dict:
+                               outgrower_block_id: str = None, company: str = None,
+                               consignment_id: str = None) -> dict:
     """
     Inserts the parsed certificate into export_regulatory_vault, then
     dispatches to the correct cross-check based on document_type.
@@ -47,6 +48,7 @@ def save_certificate_to_vault(supabase, document_type: str, parsed_data: dict,
         "farm_longitude": farm_longitude,
         "source_file_name": file_name,
         "uploaded_by": uploaded_by,
+        "company": company,
     }
 
     try:
@@ -59,7 +61,7 @@ def save_certificate_to_vault(supabase, document_type: str, parsed_data: dict,
     if document_type == "HCD_EXPORT_LICENCE":
         check_result = check_hcd_auction_breach(supabase, vault_id)
     elif document_type == "KEPHIS_PHYTOSANITARY":
-        check_result = check_kephis_vs_packhouse(supabase, vault_id, parsed_data)
+        check_result = check_kephis_vs_packhouse(supabase, vault_id, parsed_data, consignment_id, company)
     elif document_type == "GLOBALGAP_MRL":
         check_result = check_mrl_red_list(supabase, vault_id, parsed_data, outgrower_block_id)
     elif document_type == "KRA_CERTIFICATE_ORIGIN":

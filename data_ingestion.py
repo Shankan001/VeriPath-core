@@ -289,7 +289,10 @@ def rule_based_parse(uploaded_file) -> list:
                 weight = float(re.sub(r"[^\d.]","", str(weight_raw)))
             except:
                 weight = 0.0
-            if not farmer_name or farmer_name in ("nan","None","") or weight <= 0:
+            # Sanity check — see smart_parser.py for the matching fix and
+            # reasoning. Same underlying bug existed in both files.
+            MAX_PLAUSIBLE_WEIGHT_KG = 50000
+            if not farmer_name or farmer_name in ("nan","None","") or weight <= 0 or weight > MAX_PLAUSIBLE_WEIGHT_KG:
                 continue
             records.append({
                 "farmer_name":   farmer_name,

@@ -142,24 +142,41 @@ ROLE_PAGES = {
     "farmer": ["🌾 My Farm Dashboard"],
     "record_keeper": ["🌿 Outgrower Registry","📦 Packhouse Intake","📥 Data Ingestion","👥 My Team","🆘 Support"],
     "agronomist": ["🌿 Outgrower Registry","📦 Packhouse Intake","🔍 Farmer Activity Log","👥 My Team"],
-    "compliance_officer": [
-        "📥 Data Ingestion","📅 Daily Batch Reports",
-        "🔍 Pre-Audit Gate","🧪 Quarantine Desk","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault","🛰 Farm Boundary Upload","🌱 NDVI Crop Health","⛈️ Flash Weather Risk",
-    ],
-    "exporter": [
-        "📊 Dashboard","📥 Data Ingestion","📑 Consignment Ledger",
-        "🌿 Outgrower Registry","📦 Packhouse Intake","📅 Daily Batch Reports",
-        "🔍 Pre-Audit Gate","🧪 Quarantine Desk","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault","🛰 Farm Boundary Upload","🌱 NDVI Crop Health","⛈️ Flash Weather Risk",
-        "📡 Transmit to Portals","🌱 Carbon Tracking","🗺 Origin Map","🔍 Farmer Activity Log",
-        "🏢 Company Profile","👥 My Team","🆘 Support",
-    ],
-    "admin": [
-        "📊 Dashboard","📥 Data Ingestion","📑 Consignment Ledger",
-        "🌿 Outgrower Registry","📦 Packhouse Intake","📅 Daily Batch Reports",
-        "🔍 Pre-Audit Gate","🧪 Quarantine Desk","🌍 EUDR Risk Scorer","📄 Compliance PDF","🔐 Certificate Vault","🛰 Farm Boundary Upload","🌱 NDVI Crop Health","⛈️ Flash Weather Risk",
-        "📡 Transmit to Portals","🌱 Carbon Tracking","🗺 Origin Map","🔍 Farmer Activity Log",
-        "📈 KPI Dashboard","🔑 Invite Codes","👥 My Team","🗑 Demo Reset",
-    ],
+    "compliance_officer": {
+        "✅ Compliance": [
+            "🔍 Pre-Audit Gate","🧪 Quarantine Desk","🌍 EUDR Risk Scorer",
+            "📄 Compliance PDF","🔐 Certificate Vault","🛰 Farm Boundary Upload",
+            "🌱 NDVI Crop Health","⛈️ Flash Weather Risk",
+        ],
+        "📥 Data & Farmers": ["📥 Data Ingestion","📅 Daily Batch Reports"],
+        "🚀 Operations": ["👥 My Team"],
+    },
+    "exporter": {
+        "📊 Overview": ["📊 Dashboard","📑 Consignment Ledger","🌱 Carbon Tracking","🗺 Origin Map"],
+        "📥 Data & Farmers": [
+            "📥 Data Ingestion","🌿 Outgrower Registry","📦 Packhouse Intake",
+            "📅 Daily Batch Reports","🔍 Farmer Activity Log",
+        ],
+        "✅ Compliance": [
+            "🔍 Pre-Audit Gate","🧪 Quarantine Desk","🌍 EUDR Risk Scorer",
+            "📄 Compliance PDF","🔐 Certificate Vault","🛰 Farm Boundary Upload",
+            "🌱 NDVI Crop Health","⛈️ Flash Weather Risk",
+        ],
+        "🚀 Operations": ["📡 Transmit to Portals","🏢 Company Profile","👥 My Team","🆘 Support"],
+    },
+    "admin": {
+        "📊 Overview": ["📊 Dashboard","📑 Consignment Ledger","🌱 Carbon Tracking","🗺 Origin Map","📈 KPI Dashboard"],
+        "📥 Data & Farmers": [
+            "📥 Data Ingestion","🌿 Outgrower Registry","📦 Packhouse Intake",
+            "📅 Daily Batch Reports","🔍 Farmer Activity Log",
+        ],
+        "✅ Compliance": [
+            "🔍 Pre-Audit Gate","🧪 Quarantine Desk","🌍 EUDR Risk Scorer",
+            "📄 Compliance PDF","🔐 Certificate Vault","🛰 Farm Boundary Upload",
+            "🌱 NDVI Crop Health","⛈️ Flash Weather Risk",
+        ],
+        "🚀 Operations": ["📡 Transmit to Portals","🔑 Invite Codes","👥 My Team","🗑 Demo Reset"],
+    },
     "admin_livestock": [
         "📊 Farm Overview","🐄 Animal Registry","🌡 Temperature Entry",
         "📋 Daily Symptom Log","🧪 Disease Probability","🚨 Clinical Alerts",
@@ -438,10 +455,11 @@ module  = profile.get("module") or (
     else "🌿 VeriPath Crops"
 )
 
+from security import escape_html
 st.sidebar.markdown("## 🏗 VeriPath Enterprise")
 st.sidebar.markdown(
-    f"<div class='user-pill'>👤 {profile['full_name']}<br>"
-    f"<span style='color:#64748b;font-size:0.7rem'>{profile['company']} · {role}</span></div>",
+    f"<div class='user-pill'>👤 {escape_html(profile['full_name'])}<br>"
+    f"<span style='color:#64748b;font-size:0.7rem'>{escape_html(profile['company'])} · {escape_html(role)}</span></div>",
     unsafe_allow_html=True
 )
 
@@ -474,7 +492,71 @@ else:
     pages = ROLE_PAGES.get(role, ["📦 Packhouse Intake"])
 
 st.sidebar.markdown("---")
-page = st.sidebar.radio("", pages)
+if isinstance(pages, dict):
+    st.sidebar.markdown("""
+    <style>
+    section[data-testid="stSidebar"] div[data-testid="stExpander"] {
+        border: 1px solid #1e3a5f;
+        border-radius: 12px;
+        margin-bottom: 10px;
+        overflow: hidden;
+        background: #0a0e1a;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stExpander"] summary {
+        font-weight: 700;
+        color: #38bdf8;
+        font-family: "Space Mono", monospace;
+        font-size: 0.8rem;
+        letter-spacing: 0.02em;
+        padding: 4px 2px;
+    }
+    section[data-testid="stSidebar"] .stButton > button {
+        background: linear-gradient(135deg, #0f172a 0%, #131c2e 100%);
+        border: 1px solid #1e3a5f;
+        border-radius: 8px;
+        color: #cbd5e1;
+        text-align: left;
+        justify-content: flex-start;
+        padding: 8px 14px;
+        font-size: 0.83rem;
+        transition: all 0.15s ease;
+        margin-bottom: 4px;
+        width: 100%;
+    }
+    section[data-testid="stSidebar"] .stButton > button:hover {
+        background: linear-gradient(135deg, #16324a 0%, #1a3a5c 100%);
+        border-color: #38bdf8;
+        color: #e8eaf0;
+        transform: translateX(3px);
+    }
+    section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+        border-color: #22c55e;
+        color: white;
+        font-weight: 700;
+        box-shadow: 0 2px 10px rgba(34,197,94,0.35);
+    }
+    section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
+        transform: translateX(3px);
+        box-shadow: 0 3px 14px rgba(34,197,94,0.5);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    _all_pages_flat = [p for _plist in pages.values() for p in _plist]
+    if "current_page" not in st.session_state or st.session_state["current_page"] not in _all_pages_flat:
+        st.session_state["current_page"] = _all_pages_flat[0]
+    for _section_name, _page_list in pages.items():
+        _is_active_section = st.session_state["current_page"] in _page_list
+        with st.sidebar.expander(_section_name, expanded=_is_active_section):
+            for _p in _page_list:
+                _btn_type = "primary" if _p == st.session_state["current_page"] else "secondary"
+                if st.button(_p, key=f"navbtn_{_p}", use_container_width=True, type=_btn_type):
+                    st.session_state["current_page"] = _p
+                    st.rerun()
+    page = st.session_state["current_page"]
+else:
+    page = st.sidebar.radio("", pages)
 st.sidebar.markdown("---")
 st.sidebar.markdown(
     f"<small style='color:#64748b'>Role: <b style='color:#38bdf8'>{role}</b></small>",
@@ -535,6 +617,45 @@ if page == "📊 Dashboard":
     _company = profile.get("company","") if role != "admin" else ""
     _ledger  = _ll(_company)
     df = pd.DataFrame(_ledger) if _ledger else pd.DataFrame(columns=LEDGER_COLS)
+
+    from readiness_score import compute_readiness_score
+    _readiness = compute_readiness_score(_company, role)
+    _score = _readiness["score"]
+    _score_color = "#22c55e" if _score >= 85 else "#eab308" if _score >= 60 else "#ef4444"
+    _dot = "🟢" if _score >= 85 else "🟡" if _score >= 60 else "🔴"
+    st.markdown(f"""
+    <div style='background:#0a0e1a;border:2px solid {_score_color};border-radius:16px;
+                padding:24px 28px;margin-bottom:20px'>
+        <div style='color:#94a3b8;font-family:"Space Mono",monospace;font-size:0.85rem'>
+            {_dot} EXPORT READINESS</div>
+        <div style='font-size:2.6rem;font-weight:800;color:{_score_color};margin-top:4px'>
+            {_score}%</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    _missing_items = []
+    if _readiness["phi_flagged_count"]:
+        _missing_items.append(f"❌ {_readiness['phi_flagged_count']} PHI validation(s) unresolved")
+    if _readiness["missing_boundary_count"]:
+        _missing_items.append(f"❌ {_readiness['missing_boundary_count']} farmer boundary(ies) missing")
+    if _readiness["missing_cert_count"]:
+        _missing_items.append(f"❌ {_readiness['missing_cert_count']} laboratory certificate(s) missing")
+
+    if _missing_items:
+        st.markdown("**Missing:**")
+        for _item in _missing_items:
+            st.markdown(f"<div style='color:#f87171;margin:4px 0'>{_item}</div>", unsafe_allow_html=True)
+        with st.expander("See details"):
+            if _readiness["missing_boundary_names"]:
+                st.markdown("**Farmers without a boundary:** " + ", ".join(_readiness["missing_boundary_names"]))
+            if _readiness["phi_flagged_farmers"]:
+                st.markdown("**PHI flags on:** " + ", ".join(_readiness["phi_flagged_farmers"]))
+            if _readiness["missing_cert_blocks"]:
+                st.markdown("**Blocks missing a clean lab cert:** " + ", ".join(_readiness["missing_cert_blocks"]))
+    else:
+        st.success("✅ All checks passing — fully export ready.")
+
+    st.markdown("---")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown(f"""<div class='metric-card'>
@@ -548,13 +669,14 @@ if page == "📊 Dashboard":
             <div class='metric-value'>{tw:,.0f}</div>
         </div>""", unsafe_allow_html=True)
     with col3:
-        tf = df["FOB_Value_USD"].astype(float).sum() if not df.empty and "FOB_Value_USD" in df.columns else 0
+        tf = df["fob_value_usd"].astype(float).sum() if not df.empty and "fob_value_usd" in df.columns else 0
         st.markdown(f"""<div class='metric-card'>
             <div class='metric-label'>FOB VALUE (USD) 🇺🇸</div>
             <div class='metric-value' style='color:#4ade80'>${tf:,.2f}</div>
         </div>""", unsafe_allow_html=True)
     with col4:
-        vp = df[df["PIN_Valid"]=="✅ Valid"].shape[0] if not df.empty and "PIN_Valid" in df.columns else 0
+        vp = (df["kra_pin"].apply(lambda x: bool(KRA_PIN_PATTERN.match(str(x).strip().upper())) if pd.notna(x) else False).sum()
+              if not df.empty and "kra_pin" in df.columns else 0)
         st.markdown(f"""<div class='metric-card'>
             <div class='metric-label'>VERIFIED KRA PINs</div>
             <div class='metric-value'>{vp}</div>
@@ -592,7 +714,7 @@ elif page == "📑 Consignment Ledger":
         col1, col2, col3 = st.columns(3)
         col1.metric("Total", len(df))
         col2.metric("Weight (KG)", f"{df['weight_kg'].astype(float).sum():,.0f}" if 'weight_kg' in df.columns else "0")
-        col3.metric("FOB Value",   f"${df['FOB_Value_USD'].astype(float).sum():,.2f}" if 'FOB_Value_USD' in df.columns else "$0.00")
+        col3.metric("FOB Value",   f"${df['fob_value_usd'].astype(float).sum():,.2f}" if 'fob_value_usd' in df.columns else "$0.00")
         st.markdown("---")
         with st.expander("🔍 Filter"):
             fc1, fc2 = st.columns(2)

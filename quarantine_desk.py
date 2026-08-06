@@ -11,6 +11,8 @@ import pandas as pd
 from datetime import datetime, timezone
 from ledger_db import load_ledger, update_ledger_record_by_id
 from supabase_db import get_client
+from quarantine_ai import suggest_fixes, synthesize_action_plan
+from security import escape_html
 
 
 def render_quarantine_desk_page(profile: dict):
@@ -91,11 +93,11 @@ def render_quarantine_desk_page(profile: dict):
                 f"<div style='background:#1a0a0a;border:1px solid #dc2626;border-radius:8px;padding:14px 18px;margin-bottom:6px'>"
                 f"<b style='color:#f87171'>{row.get('farmer_name','—')}</b> · "
                 f"{row.get('county','—')} · {row.get('weight_kg','—')} kg<br>"
-                f"<span style='color:#fbbf24;font-size:0.85rem'>{row.get('audit_failure_reason','—')}</span>"
+                f"<span style='color:#fbbf24;font-size:0.85rem'>{escape_html(row.get('audit_failure_reason','—'))}</span>"
                 f"</div>", unsafe_allow_html=True
             )
 
-            col_a, col_b, col_c = st.columns(3)
+            col_a, col_b, col_c, col_d = st.columns(4)
             with col_a:
                 with st.expander("✏️ Review & Fix"):
                     with st.form(f"fix_form_{record_id}"):
@@ -186,3 +188,20 @@ def render_quarantine_desk_page(profile: dict):
                         )
                     else:
                         st.warning("No phone number available for this contact.")
+
+            with col_d:
+                with st.expander("💡 Suggested Fix"):
+                    _suggestions = suggest_fixes(row.get("audit_failure_reason", ""), row.get("crop", ""))
+                    if not _suggestions:
+                        st.info("No specific suggestions available for this record.")
+                    else:
+                        st.caption("Rule-based, grounded in the same reference data used elsewhere in the app — not AI-guessed.")
+                        for _s in _suggestions:
+                            st.markdown(f"- {_s}")
+                        st.markdown("---")
+                        if st.button("🤖 Generate AI Summary", key=f"ai_summary_btn_{record_id}", use_container_width=True):
+                            with st.spinner("Summarizing..."):
+                                _summary = synthesize_action_plan(_suggestions, row.get("farmer_name", "—"))
+                            st.markdown(f"<div style='background:#0d1224;border:1px solid #38bdf8;border-radius:8px;"
+                                        f"padding:12px 16px;margin-top:8px;color:#e8eaf0;font-size:0.88rem'>{_summary}</div>",
+                                        unsafe_allow_html=True)
