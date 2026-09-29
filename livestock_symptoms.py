@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timezone
 from supabase_db import get_client
+from security import escape_html
 
 # ── SQL (run once in Supabase):
 # CREATE TABLE IF NOT EXISTS symptom_logs (
@@ -320,7 +321,7 @@ def render_symptom_log(profile: dict):
                 <div style='color:#64748b;font-size:0.75rem;margin-top:4px'>
                     {', '.join(active_sym) if active_sym else 'No symptoms checked'}
                 </div>
-                {f"<div style='color:#94a3b8;font-size:0.78rem;margin-top:4px;font-style:italic'>{log.get('notes','')}</div>" if log.get('notes') else ''}
+                {f"<div style='color:#94a3b8;font-size:0.78rem;margin-top:4px;font-style:italic'>{escape_html(log.get('notes',''))}</div>" if log.get('notes') else ''}
             </div>
             """, unsafe_allow_html=True)
 

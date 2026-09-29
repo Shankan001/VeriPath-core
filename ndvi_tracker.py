@@ -5,6 +5,16 @@ boundary, stores the reading, and flags a Drought/Disease Stress Alert
 if greenness has dropped >=15% over the last 2 weeks.
 
 Run this on a schedule (e.g. every 14 days) via cron / Railway scheduled job.
+
+FIXES vs previous version:
+- evalscript now masks out cloud, cloud-shadow, water, snow, and
+  no-data pixels using the Scene Classification (SCL) band, so a
+  farm's NDVI mean isn't dragged toward 0 by clouds sitting over it
+  even when the whole tile passes the 60% cloud filter.
+- Skips writing a reading if too few valid (unmasked) pixels remain
+  for the farm, instead of writing a misleading near-zero mean.
+- Upserts on (farm_boundary_id, reading_date) instead of blind
+  insert, so re-running the script never creates duplicate rows.
 """
 
 import os
@@ -27,6 +37,7 @@ SENTINEL_STATS_URL = "https://services.sentinel-hub.com/api/v1/statistics"
 
 DROP_THRESHOLD_PCT = 15.0   # trigger alert if NDVI falls 15%+ over 2 weeks
 LOOKBACK_DAYS = 14
+MIN_VALID_PIXEL_PCT = 20.0  # skip writing a reading if less than this % of pixels are valid (not cloud/shadow/water)
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
@@ -46,7 +57,6 @@ def get_sentinel_token() -> str:
 
 
 def get_all_farm_boundaries():
-    """Fetch every farm boundary row (id + name), then pull its GeoJSON via RPC."""
     result = supabase.table("farm_boundaries").select("id, farm_name").execute()
     return result.data
 
@@ -69,8 +79,15 @@ def classify_ndvi(ndvi_mean: float) -> str:
 
 def fetch_ndvi_stats(token: str, geometry: dict, start: date, end: date):
     """
-    Calls Sentinel Hub Statistical API for NDVI mean/min/max + cloud cover
-    over the given polygon and date range (Sentinel-2 L2A).
+    Calls Sentinel Hub Statistical API for NDVI mean/min/max over the
+    given polygon and date range (Sentinel-2 L2A), masking out cloud,
+    cloud-shadow, water, and snow pixels using the SCL band so they
+    don't drag the farm's NDVI mean down.
+
+    SCL classes kept as valid: 4 (vegetation), 5 (bare soil), 7 (unclassified)
+    SCL classes masked out: 0 (no data), 1 (saturated/defective),
+    2 (dark area/shadow), 3 (cloud shadow), 6 (water), 8/9 (cloud
+    medium/high probability), 10 (thin cirrus), 11 (snow/ice)
     """
     evalscript = """
     //VERSION=3
@@ -84,8 +101,11 @@ def fetch_ndvi_stats(token: str, geometry: dict, start: date, end: date):
       };
     }
     function evaluatePixel(s) {
-      let ndvi = (s.B08 - s.B04) / (s.B08 + s.B04);
-      return { ndvi: [ndvi], dataMask: [s.dataMask] };
+      let validClasses = [4, 5, 7];
+      let isValidScl = validClasses.includes(s.SCL);
+      let mask = (s.dataMask === 1 && isValidScl) ? 1 : 0;
+      let ndvi = (s.B08 + s.B04) !== 0 ? (s.B08 - s.B04) / (s.B08 + s.B04) : 0;
+      return { ndvi: [ndvi], dataMask: [mask] };
     }
     """
 
@@ -123,25 +143,41 @@ def fetch_ndvi_stats(token: str, geometry: dict, start: date, end: date):
 
 
 def parse_stats_response(stats_json: dict):
-    """Extract ndvi mean/min/max and cloud cover from the Statistical API response."""
+    """
+    Extract ndvi mean/min/max from the Statistical API response.
+    Returns None if no data, or if too few valid (non-cloud/shadow/water)
+    pixels were found to trust the reading.
+    """
     data = stats_json.get("data", [])
     if not data:
         return None
 
     latest = data[-1]  # most recent interval
-    ndvi_stats = latest["outputs"]["ndvi"]["bands"]["B0"]["stats"]
+    ndvi_band = latest["outputs"]["ndvi"]["bands"]["B0"]
+    stats = ndvi_band["stats"]
+
+    sample_count = stats.get("sampleCount", 0)
+    no_data_count = stats.get("noDataCount", 0)
+    valid_count = sample_count - no_data_count
+
+    if sample_count == 0:
+        return None
+
+    valid_pct = round((valid_count / sample_count) * 100, 1)
+    if valid_pct < MIN_VALID_PIXEL_PCT:
+        return {"skip_reason": f"only {valid_pct}% valid pixels (cloud/shadow/water covering the farm)"}
 
     return {
-        "ndvi_mean": round(ndvi_stats["mean"], 3),
-        "ndvi_min": round(ndvi_stats["min"], 3),
-        "ndvi_max": round(ndvi_stats["max"], 3),
-        "cloud_cover_pct": None,  # populate if SCL band stats added later
+        "ndvi_mean": round(stats["mean"], 3),
+        "ndvi_min": round(stats["min"], 3),
+        "ndvi_max": round(stats["max"], 3),
+        "valid_pixel_pct": valid_pct,
+        "cloud_cover_pct": round(100 - valid_pct, 1),
         "raw_response": stats_json,
     }
 
 
 def get_previous_reading(farm_boundary_id: str, before_date: date):
-    """Get the most recent ndvi_readings row before `before_date` for this farm."""
     result = (
         supabase.table("ndvi_readings")
         .select("ndvi_mean, reading_date")
@@ -154,8 +190,14 @@ def get_previous_reading(farm_boundary_id: str, before_date: date):
     return result.data[0] if result.data else None
 
 
-def insert_ndvi_reading(farm_boundary_id: str, reading_date: date, stats: dict):
-    supabase.table("ndvi_readings").insert({
+def upsert_ndvi_reading(farm_boundary_id: str, reading_date: date, stats: dict):
+    """
+    Upserts on (farm_boundary_id, reading_date) — requires the
+    unique_farm_reading_date constraint from ndvi_dedup_and_constraint.sql.
+    Re-running this script for the same farm/date updates the row
+    instead of creating a duplicate.
+    """
+    supabase.table("ndvi_readings").upsert({
         "farm_boundary_id": farm_boundary_id,
         "reading_date": reading_date.isoformat(),
         "ndvi_mean": stats["ndvi_mean"],
@@ -164,7 +206,7 @@ def insert_ndvi_reading(farm_boundary_id: str, reading_date: date, stats: dict):
         "cloud_cover_pct": stats["cloud_cover_pct"],
         "source": "sentinel_hub",
         "raw_response": stats["raw_response"],
-    }).execute()
+    }, on_conflict="farm_boundary_id,reading_date").execute()
 
 
 def maybe_create_stress_alert(farm_boundary_id: str, previous_ndvi: float, current_ndvi: float):
@@ -210,15 +252,19 @@ def run():
             continue
 
         if stats is None:
-            print(f"  -> No NDVI data returned (likely cloud cover), skipping.")
+            print(f"  -> No NDVI data returned at all, skipping.")
+            continue
+
+        if "skip_reason" in stats:
+            print(f"  -> Skipped: {stats['skip_reason']}")
             continue
 
         band = classify_ndvi(stats["ndvi_mean"])
-        print(f"  -> NDVI mean {stats['ndvi_mean']} ({band})")
+        print(f"  -> NDVI mean {stats['ndvi_mean']} ({band}), {stats['valid_pixel_pct']}% valid pixels")
 
         previous = get_previous_reading(farm_id, today)
 
-        insert_ndvi_reading(farm_id, today, stats)
+        upsert_ndvi_reading(farm_id, today, stats)
 
         if previous:
             maybe_create_stress_alert(farm_id, previous["ndvi_mean"], stats["ndvi_mean"])

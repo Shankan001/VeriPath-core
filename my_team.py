@@ -1,14 +1,98 @@
 import streamlit as st
 import pandas as pd
 from invite_codes import generate_invite_code
-from supabase_db import load_users
+from supabase_db import load_users, set_user_active
 from ledger_db import load_farmers
+
+WORKER_ROLES = ("farm_manager", "herdsman", "veterinarian")
+
+
+def _render_livestock_worker_management(viewer_username: str, company: str):
+    """Shared list + deactivate/reactivate UI for farm_manager and admin
+    (livestock mode). Records already logged by a deactivated worker are
+    never touched — this only blocks future login."""
+    st.markdown("### Team Members")
+    all_users = load_users()
+    company_lower = company.strip().lower()
+    workers = [
+        u for u in all_users.values()
+        if u.get("company", "").strip().lower() == company_lower
+        and u.get("role") in WORKER_ROLES
+        and u.get("username") != viewer_username  # never deactivate yourself
+    ]
+
+    if not workers:
+        st.info("No farm managers, herdsmen, or vets registered for this company yet.")
+        return
+
+    for u in workers:
+        is_active = u.get("is_active", True)
+        status_color = "#4ade80" if is_active else "#f87171"
+        status_label = "Active" if is_active else "Deactivated"
+
+        col_info, col_action = st.columns([3, 1])
+        with col_info:
+            st.markdown(f"""
+            <div style='background:#111827;border:1px solid #1e3a5f;
+                        border-radius:10px;padding:10px 16px;margin-bottom:6px'>
+                <span style='color:#e8eaf0;font-weight:600'>{u.get('full_name','—')}</span>
+                <span style='color:#64748b;font-size:0.8rem'>
+                    &nbsp;· {u.get('role','').replace('_',' ').title()} · @{u.get('username','')}
+                </span><br>
+                <span style='color:{status_color};font-size:0.78rem;font-family:Space Mono,monospace'>
+                    ● {status_label}
+                </span>
+            </div>
+            """, unsafe_allow_html=True)
+        with col_action:
+            btn_label = "🚫 Deactivate" if is_active else "✅ Reactivate"
+            if st.button(btn_label, key=f"toggle_{u['username']}", use_container_width=True):
+                if set_user_active(u["username"], not is_active):
+                    st.success(f"{u['full_name']} {'deactivated' if is_active else 'reactivated'}.")
+                    st.rerun()
+                else:
+                    st.error("Failed to update status. Try again.")
+
+    st.caption(
+        "Deactivating blocks future login only — every weight, feed, cost, "
+        "and milk record they already logged stays exactly as it is, under "
+        "their name, as an audit trail."
+    )
 
 
 def render_my_team(profile: dict):
-    role    = profile.get("role", "")
-    company = profile.get("company", "")
+    role     = profile.get("role", "")
+    company  = profile.get("company", "")
     username = profile.get("username", "")
+    module   = profile.get("module", "")
+
+    # ── ADMIN, LIVESTOCK MODULE: manage any company's workers ─────────────
+    if role == "admin" and "Livestock" in module:
+        st.markdown("# 👥 Team Management — Livestock")
+        st.caption("Manage farm managers, herdsmen, and vets across any company.")
+        st.markdown("---")
+
+        all_users = load_users()
+        companies_with_workers = sorted({
+            u.get("company", "") for u in all_users.values()
+            if u.get("role") in WORKER_ROLES and u.get("company")
+        })
+        if not companies_with_workers:
+            st.info("No livestock companies with workers yet.")
+            return
+
+        selected_company = st.selectbox("Company", companies_with_workers)
+        st.markdown("---")
+        _render_livestock_worker_management(username, selected_company)
+        return
+
+    # ── FARM MANAGER: manage own company's workers ─────────────────────────
+    if role == "farm_manager":
+        st.markdown("# 👥 My Team")
+        st.caption("Manage your farm's managers, herdsmen, and vets.")
+        st.markdown("---")
+        _render_livestock_worker_management(username, company)
+        return
 
     # ── RECORD KEEPER: farmer codes + own farmers only ────────────────────
     if role == "record_keeper":
@@ -116,7 +200,7 @@ def render_my_team(profile: dict):
         else:
             st.info("No record keepers yet.")
 
-    # ── EXPORTER / ADMIN: full team management ────────────────────────────
+    # ── EXPORTER / ADMIN (CROPS): full team management ────────────────────
     elif role in ("exporter", "admin"):
         st.markdown("# My Team")
         st.caption("Manage your full team — record keepers, compliance officers, agronomists.")

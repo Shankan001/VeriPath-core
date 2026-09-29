@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timezone, time
 from supabase_db import get_client
+from security import escape_html
 
 # ── Supabase table (run once in SQL editor):
 # CREATE TABLE IF NOT EXISTS animal_temps (
@@ -281,7 +282,7 @@ def render_temp_monitoring(profile: dict):
                         {a.get('temp_celsius','—')}°C · {a.get('time_of_day','—')}
                     </div>
                     <div style='color:#94a3b8;font-size:0.8rem;margin-top:2px'>
-                        {a.get('notes') or 'No notes'}
+                        {escape_html(a.get('notes')) or 'No notes'}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)

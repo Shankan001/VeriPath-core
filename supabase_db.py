@@ -66,6 +66,17 @@ def update_user_login(username: str) -> None:
         ).eq("username", username).execute()
     except Exception as e:
         print(f"[DB] update_user_login error: {e}")
+        
+        
+def set_user_active(username: str, is_active: bool) -> bool:
+    try:
+        get_client().table("users").update(
+            {"is_active": is_active}
+        ).eq("username", username).execute()
+        return True
+    except Exception as e:
+        print(f"[DB] set_user_active error: {e}")
+        return False
 
 # ── COMPANIES ─────────────────────────────────────────────────────────────
 
@@ -185,6 +196,121 @@ def list_companies(exporters_only: bool = False) -> list[dict]:
         return []
 
 # ── INVITE CODES ──────────────────────────────────────────────────────────
+
+def _company_key(name: str) -> str:
+    return name.strip().lower()
+
+def load_companies() -> dict:
+    try:
+        res = get_client().table("companies").select("*").execute()
+        return {r["company_key"]: r for r in res.data}
+    except Exception as e:
+        print(f"[DB] load_companies error: {e}")
+        return {}
+
+def get_company(company_name: str) -> dict | None:
+    try:
+        key = _company_key(company_name)
+        res = get_client().table("companies").select("*").eq("company_key", key).execute()
+        return res.data[0] if res.data else None
+    except Exception as e:
+        print(f"[DB] get_company error: {e}")
+        return None
+
+def ensure_company(company_name: str, created_at: str = None) -> dict:
+    key = _company_key(company_name)
+    existing = get_company(company_name)
+    if existing:
+        return existing
+    try:
+        data = {
+            "company_key":        key,
+            "company_name":       company_name.strip(),
+            "subscription_tier":  "trial",
+            "trial_started_at":   created_at or _now(),
+            "tier_set_at":        None,
+            "tier_expires_at":    None,
+            "containers_used":    0,
+        }
+        get_client().table("companies").insert(data).execute()
+        return data
+    except Exception as e:
+        print(f"[DB] ensure_company error: {e}")
+        return {}
+
+def update_company_tier(company_name: str, tier: str,
+                         expires_at: str) -> bool:
+    try:
+        key = _company_key(company_name)
+        get_client().table("companies").update({
+            "subscription_tier": tier,
+            "tier_set_at":       _now(),
+            "tier_expires_at":   expires_at,
+            "containers_used":   0,
+        }).eq("company_key", key).execute()
+        return True
+    except Exception as e:
+        print(f"[DB] update_company_tier error: {e}")
+        return False
+
+def update_company_profile(company_name: str, exporter_kra_pin: str = None,
+                            afa_license_number: str = None) -> bool:
+    try:
+        key = _company_key(company_name)
+        updates = {}
+        if exporter_kra_pin is not None:
+            updates["exporter_kra_pin"] = exporter_kra_pin.strip()
+        if afa_license_number is not None:
+            updates["afa_license_number"] = afa_license_number.strip()
+        if not updates:
+            return True
+        get_client().table("companies").update(updates).eq("company_key", key).execute()
+        return True
+    except Exception as e:
+        print(f"[DB] update_company_profile error: {e}")
+        return False
+
+
+def increment_company_containers(company_name: str) -> int:
+    try:
+        key = _company_key(company_name)
+        rec = get_company(company_name)
+        current = int(rec.get("containers_used", 0)) if rec else 0
+        new_val = current + 1
+        get_client().table("companies").update(
+            {"containers_used": new_val}
+        ).eq("company_key", key).execute()
+        return new_val
+    except Exception as e:
+        print(f"[DB] increment_containers error: {e}")
+        return 0
+
+def list_companies(exporters_only: bool = False) -> list[dict]:
+    try:
+        companies = load_companies()
+        if exporters_only:
+            users = load_users()
+            exporter_companies = {
+                _company_key(u.get("company",""))
+                for u in users.values()
+                if u.get("role") == "exporter"
+            }
+            companies = {k: v for k, v in companies.items()
+                         if k in exporter_companies}
+        return [
+            {
+                "Company":     v.get("company_name", k),
+                "Tier":        v.get("subscription_tier","trial"),
+                "Trial Start": str(v.get("trial_started_at",""))[:10],
+                "Expires":     str(v.get("tier_expires_at",""))[:10]
+                               if v.get("tier_expires_at") else "—",
+                "Containers":  v.get("containers_used", 0),
+            }
+            for k, v in companies.items()
+        ]
+    except Exception as e:
+        print(f"[DB] list_companies error: {e}")
+        return []
 
 def load_invite_codes() -> dict:
     try:
@@ -512,3 +638,11 @@ def save_full_ledger_db(records: list[dict]) -> None:
             get_client().table("ledger").upsert(r).execute()
     except Exception as e:
         print(f"[DB] save_full_ledger error: {e}")
+
+def get_user_by_phone(phone: str) -> dict | None:
+    try:
+        res = get_client().table("users").select("*").eq("phone", phone).execute()
+        return res.data[0] if res.data else None
+    except Exception as e:
+        print(f"[DB] get_user_by_phone error: {e}")
+        return None

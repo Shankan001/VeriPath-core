@@ -20,6 +20,9 @@ COST_TYPES = {
     "📋 Other":              "other",
 }
 
+ENTRY_ROLES   = ("admin", "farm_manager", "diaspora_owner", "herdsman")
+SUMMARY_ROLES = ("admin", "farm_manager", "diaspora_owner")
+
 def save_cost(record: dict) -> bool:
     try:
         _client().table("animal_costs").insert(record).execute()
@@ -59,8 +62,8 @@ def render_cost_entry(profile: dict):
     username = profile.get("username","")
     role     = profile.get("role","")
 
-    if role not in ("admin","farm_manager","diaspora_owner"):
-        st.warning("🔒 Cost entry requires farm_manager or admin role.")
+    if role not in ENTRY_ROLES:
+        st.warning("🔒 Cost entry requires herdsman, farm_manager, diaspora_owner, or admin role.")
         return
 
     st.markdown("# 💰 Cost of Production")
@@ -84,14 +87,20 @@ def render_cost_entry(profile: dict):
         st.info("No animals registered yet.")
         return
 
-    tab_entry, tab_view = st.tabs(["➕ Log Cost", "📊 Cost Summary"])
+    is_herdsman = (role == "herdsman")
+
+    if is_herdsman:
+        tabs = st.tabs(["➕ Log Cost"])
+        tab_entry = tabs[0]
+        tab_view = None
+    else:
+        tab_entry, tab_view = st.tabs(["➕ Log Cost", "📊 Cost Summary"])
 
     # ── TAB 1: Log Cost ────────────────────────────────────────────────
     with tab_entry:
         st.markdown("<div class='section-header'>LOG COST ENTRY</div>",
                     unsafe_allow_html=True)
 
-        # Bulk or single animal
         entry_mode = st.radio(
             "Entry mode",
             ["Single animal", "Whole herd (shared cost)"],
@@ -167,100 +176,98 @@ def render_cost_entry(profile: dict):
                     )
                     st.rerun()
 
-    # ── TAB 2: Cost Summary ────────────────────────────────────────────
-    with tab_view:
-        st.markdown("<div class='section-header'>COST BREAKDOWN</div>",
-                    unsafe_allow_html=True)
+    # ── TAB 2: Cost Summary (hidden entirely for herdsman) ──────────────
+    if tab_view is not None:
+        with tab_view:
+            st.markdown("<div class='section-header'>COST BREAKDOWN</div>",
+                        unsafe_allow_html=True)
 
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            sel_month = st.selectbox(
-                "Month", list(range(1,13)),
-                index=date.today().month - 1,
-                format_func=lambda m: datetime(2000,m,1).strftime("%B")
-            )
-        with col_f2:
-            sel_year = st.number_input(
-                "Year", min_value=2024,
-                max_value=2030, value=date.today().year
-            )
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                sel_month = st.selectbox(
+                    "Month", list(range(1,13)),
+                    index=date.today().month - 1,
+                    format_func=lambda m: datetime(2000,m,1).strftime("%B")
+                )
+            with col_f2:
+                sel_year = st.number_input(
+                    "Year", min_value=2024,
+                    max_value=2030, value=date.today().year
+                )
 
-        costs = load_costs(company, month=sel_month, year=sel_year)
+            costs = load_costs(company, month=sel_month, year=sel_year)
 
-        if not costs:
-            st.info(f"No costs logged for {datetime(2000,sel_month,1).strftime('%B')} {sel_year}.")
-            return
+            if not costs:
+                st.info(f"No costs logged for {datetime(2000,sel_month,1).strftime('%B')} {sel_year}.")
+                return
 
-        df = pd.DataFrame(costs)
-        df["amount_kes"] = df["amount_kes"].astype(float)
-        total_month = df["amount_kes"].sum()
+            df = pd.DataFrame(costs)
+            df["amount_kes"] = df["amount_kes"].astype(float)
+            total_month = df["amount_kes"].sum()
 
-        # KPI strip
-        c1, c2, c3 = st.columns(3)
-        c1.markdown(f"""<div class='metric-card'>
-            <div class='metric-label'>TOTAL COSTS</div>
-            <div class='metric-value' style='color:#f87171'>
-                KES {total_month:,.0f}
-            </div>
-        </div>""", unsafe_allow_html=True)
-        c2.markdown(f"""<div class='metric-card'>
-            <div class='metric-label'>COST ENTRIES</div>
-            <div class='metric-value'>{len(df)}</div>
-        </div>""", unsafe_allow_html=True)
-        animals_with_costs = df["animal_tag"].nunique()
-        c3.markdown(f"""<div class='metric-card'>
-            <div class='metric-label'>ANIMALS TRACKED</div>
-            <div class='metric-value'>{animals_with_costs}</div>
-        </div>""", unsafe_allow_html=True)
-
-        st.markdown("---")
-
-        # By cost type
-        st.markdown("<div class='section-header'>BY COST TYPE</div>",
-                    unsafe_allow_html=True)
-        type_summary = (df.groupby("cost_type")["amount_kes"]
-                          .sum().reset_index()
-                          .sort_values("amount_kes", ascending=False))
-        type_summary.columns = ["Cost Type","Amount (KES)"]
-
-        for _, row in type_summary.iterrows():
-            pct = (row["Amount (KES)"] / total_month * 100) if total_month else 0
-            label = next((k for k,v in COST_TYPES.items() if v == row["Cost Type"]),
-                         row["Cost Type"])
-            st.markdown(f"""
-            <div style='background:#111827;border:1px solid #1e3a5f;
-                        border-radius:10px;padding:10px 16px;margin-bottom:6px'>
-                <div style='display:flex;justify-content:space-between'>
-                    <span style='color:#e8eaf0;font-size:0.88rem'>{label}</span>
-                    <span style='font-family:Space Mono,monospace;color:#f87171;
-                                 font-weight:700'>
-                        KES {row["Amount (KES)"]:,.0f}
-                    </span>
+            c1, c2, c3 = st.columns(3)
+            c1.markdown(f"""<div class='metric-card'>
+                <div class='metric-label'>TOTAL COSTS</div>
+                <div class='metric-value' style='color:#f87171'>
+                    KES {total_month:,.0f}
                 </div>
-                <div style='background:#1e2d45;border-radius:4px;height:6px;margin-top:6px'>
-                    <div style='background:#f87171;width:{pct:.0f}%;
-                                height:6px;border-radius:4px'></div>
-                </div>
-                <div style='color:#64748b;font-size:0.72rem;margin-top:2px'>
-                    {pct:.1f}% of total
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            </div>""", unsafe_allow_html=True)
+            c2.markdown(f"""<div class='metric-card'>
+                <div class='metric-label'>COST ENTRIES</div>
+                <div class='metric-value'>{len(df)}</div>
+            </div>""", unsafe_allow_html=True)
+            animals_with_costs = df["animal_tag"].nunique()
+            c3.markdown(f"""<div class='metric-card'>
+                <div class='metric-label'>ANIMALS TRACKED</div>
+                <div class='metric-value'>{animals_with_costs}</div>
+            </div>""", unsafe_allow_html=True)
 
-        # Per animal
-        st.markdown("---")
-        st.markdown("<div class='section-header'>BY ANIMAL</div>",
-                    unsafe_allow_html=True)
-        animal_summary = (df.groupby("animal_tag")["amount_kes"]
-                            .sum().reset_index()
-                            .sort_values("amount_kes", ascending=False))
-        animal_summary.columns = ["Animal Tag","Total Cost (KES)"]
-        st.dataframe(animal_summary, use_container_width=True, hide_index=True)
+            st.markdown("---")
 
-        if st.button("⬇ Export Costs CSV"):
-            st.download_button(
-                "Download",
-                data=df.to_csv(index=False).encode("utf-8"),
-                file_name=f"veripath_costs_{sel_year}_{sel_month:02d}.csv",
-                mime="text/csv"
-            )
+            st.markdown("<div class='section-header'>BY COST TYPE</div>",
+                        unsafe_allow_html=True)
+            type_summary = (df.groupby("cost_type")["amount_kes"]
+                              .sum().reset_index()
+                              .sort_values("amount_kes", ascending=False))
+            type_summary.columns = ["Cost Type","Amount (KES)"]
+
+            for _, row in type_summary.iterrows():
+                pct = (row["Amount (KES)"] / total_month * 100) if total_month else 0
+                label = next((k for k,v in COST_TYPES.items() if v == row["Cost Type"]),
+                             row["Cost Type"])
+                st.markdown(f"""
+                <div style='background:#111827;border:1px solid #1e3a5f;
+                            border-radius:10px;padding:10px 16px;margin-bottom:6px'>
+                    <div style='display:flex;justify-content:space-between'>
+                        <span style='color:#e8eaf0;font-size:0.88rem'>{label}</span>
+                        <span style='font-family:Space Mono,monospace;color:#f87171;
+                                     font-weight:700'>
+                            KES {row["Amount (KES)"]:,.0f}
+                        </span>
+                    </div>
+                    <div style='background:#1e2d45;border-radius:4px;height:6px;margin-top:6px'>
+                        <div style='background:#f87171;width:{pct:.0f}%;
+                                    height:6px;border-radius:4px'></div>
+                    </div>
+                    <div style='color:#64748b;font-size:0.72rem;margin-top:2px'>
+                        {pct:.1f}% of total
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("---")
+            st.markdown("<div class='section-header'>BY ANIMAL</div>",
+                        unsafe_allow_html=True)
+            animal_summary = (df.groupby("animal_tag")["amount_kes"]
+                                .sum().reset_index()
+                                .sort_values("amount_kes", ascending=False))
+            animal_summary.columns = ["Animal Tag","Total Cost (KES)"]
+            st.dataframe(animal_summary, use_container_width=True, hide_index=True)
+
+            if st.button("⬇ Export Costs CSV"):
+                st.download_button(
+                    "Download",
+                    data=df.to_csv(index=False).encode("utf-8"),
+                    file_name=f"veripath_costs_{sel_year}_{sel_month:02d}.csv",
+                    mime="text/csv"
+                )

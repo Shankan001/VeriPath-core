@@ -8,11 +8,12 @@ def _client():
     return get_client()
 
 def _next_tag(company: str) -> str:
-    """Generate next VP-LIV-XXXX tag for this company."""
+    """Generate next VP-LIV-XXXX tag, globally unique across all companies
+    (required since animal_tag is a global UNIQUE constraint, referenced
+    as a foreign key by growth_records, feed_input_records, etc.)."""
     try:
         res = (_client().table("animals")
                .select("animal_tag")
-               .eq("company", company)
                .execute())
         existing = [r["animal_tag"] for r in (res.data or [])]
         nums = []
@@ -25,7 +26,7 @@ def _next_tag(company: str) -> str:
     except Exception:
         import secrets
         return f"VP-LIV-{secrets.token_hex(2).upper()}"
-
+        
 def _age_months(birth_date: date) -> int:
     today = date.today()
     return (today.year - birth_date.year) * 12 + (today.month - birth_date.month)

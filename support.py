@@ -3,7 +3,7 @@ import pandas as pd
 import urllib.parse
 from datetime import datetime, timezone
 from supabase_db import get_client
-from security import sanitize_text, check_rate_limit, log_security_event
+from security import sanitize_text, check_rate_limit, log_security_event, escape_html
 
 def get_setting(key: str, default: str = "") -> str:
     try:
@@ -377,7 +377,7 @@ def render_support_page(profile: dict):
                         {t.get("category","—")}
                     </div>
                     <div style='color:#94a3b8;font-size:0.85rem;margin-top:8px'>
-                        {sanitize_text(t.get("message",""), max_length=200)}
+                        {escape_html(sanitize_text(t.get("message",""), max_length=200))}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)

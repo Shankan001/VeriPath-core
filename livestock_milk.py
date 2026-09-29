@@ -6,6 +6,9 @@ from supabase_db import get_client
 def _client():
     return get_client()
 
+ENTRY_ROLES   = ("admin", "farm_manager", "diaspora_owner", "herdsman")
+SUMMARY_ROLES = ("admin", "farm_manager", "diaspora_owner")
+
 def save_milk_record(record: dict) -> bool:
     try:
         _client().table("milk_records").insert(record).execute()
@@ -50,8 +53,8 @@ def render_milk_tracker(profile: dict):
     username = profile.get("username","")
     role     = profile.get("role","")
 
-    if role not in ("admin","farm_manager","diaspora_owner"):
-        st.warning("🔒 Milk tracking requires farm_manager or admin role.")
+    if role not in ENTRY_ROLES:
+        st.warning("🔒 Milk tracking requires herdsman, farm_manager, diaspora_owner, or admin role.")
         return
 
     st.markdown("# 🥛 Milk Production Tracker")
@@ -65,7 +68,14 @@ def render_milk_tracker(profile: dict):
         st.info("No female cattle or goats registered yet.")
         return
 
-    tab_entry, tab_summary = st.tabs(["🥛 Log Milk", "📊 Production Summary"])
+    is_herdsman = (role == "herdsman")
+
+    if is_herdsman:
+        tabs = st.tabs(["🥛 Log Milk"])
+        tab_entry = tabs[0]
+        tab_summary = None
+    else:
+        tab_entry, tab_summary = st.tabs(["🥛 Log Milk", "📊 Production Summary"])
 
     # ── TAB 1: Log Milk ────────────────────────────────────────────────
     with tab_entry:
@@ -77,7 +87,6 @@ def render_milk_tracker(profile: dict):
             for a in dairy_animals
         }
 
-        # Check market price from last record
         last_records = load_milk_records(company, month=date.today().month,
                                          year=date.today().year)
         last_price = (float(last_records[0]["price_per_ltr"])
@@ -118,7 +127,7 @@ def render_milk_tracker(profile: dict):
 
         if sub_btn:
             if total_ltrs <= 0:
-                st.warning("⚠️ Total yield is 0 — please enter morning or evening yield.")
+                st.warning("⚠ Total yield is 0 — please enter morning or evening yield.")
             else:
                 record = {
                     "animal_tag":   sel_animal["animal_tag"],
@@ -140,97 +149,96 @@ def render_milk_tracker(profile: dict):
                     )
                     st.rerun()
 
-    # ── TAB 2: Production Summary ──────────────────────────────────────
-    with tab_summary:
-        st.markdown("<div class='section-header'>PRODUCTION SUMMARY</div>",
-                    unsafe_allow_html=True)
+    # ── TAB 2: Production Summary (hidden entirely for herdsman) ───────
+    if tab_summary is not None:
+        with tab_summary:
+            st.markdown("<div class='section-header'>PRODUCTION SUMMARY</div>",
+                        unsafe_allow_html=True)
 
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            sel_month = st.selectbox(
-                "Month", list(range(1,13)),
-                index=date.today().month - 1,
-                format_func=lambda m: datetime(2000,m,1).strftime("%B"),
-                key="milk_month"
-            )
-        with col_f2:
-            sel_year = st.number_input(
-                "Year", min_value=2024, max_value=2030,
-                value=date.today().year, key="milk_year"
-            )
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                sel_month = st.selectbox(
+                    "Month", list(range(1,13)),
+                    index=date.today().month - 1,
+                    format_func=lambda m: datetime(2000,m,1).strftime("%B"),
+                    key="milk_month"
+                )
+            with col_f2:
+                sel_year = st.number_input(
+                    "Year", min_value=2024, max_value=2030,
+                    value=date.today().year, key="milk_year"
+                )
 
-        records = load_milk_records(company, month=sel_month, year=sel_year)
+            records = load_milk_records(company, month=sel_month, year=sel_year)
 
-        if not records:
-            st.info(f"No milk records for {datetime(2000,sel_month,1).strftime('%B')} {sel_year}.")
-            return
+            if not records:
+                st.info(f"No milk records for {datetime(2000,sel_month,1).strftime('%B')} {sel_year}.")
+                return
 
-        df = pd.DataFrame(records)
-        df["total_ltrs"]   = df["total_ltrs"].astype(float)
-        df["revenue_kes"]  = df["revenue_kes"].astype(float)
+            df = pd.DataFrame(records)
+            df["total_ltrs"]   = df["total_ltrs"].astype(float)
+            df["revenue_kes"]  = df["revenue_kes"].astype(float)
 
-        total_litres  = df["total_ltrs"].sum()
-        total_revenue = df["revenue_kes"].sum()
-        days_recorded = df["record_date"].nunique()
-        avg_daily     = round(total_litres / days_recorded, 1) if days_recorded else 0
+            total_litres  = df["total_ltrs"].sum()
+            total_revenue = df["revenue_kes"].sum()
+            days_recorded = df["record_date"].nunique()
+            avg_daily     = round(total_litres / days_recorded, 1) if days_recorded else 0
 
-        c1, c2, c3, c4 = st.columns(4)
-        c1.markdown(f"""<div class='metric-card'>
-            <div class='metric-label'>TOTAL YIELD</div>
-            <div class='metric-value' style='color:#38bdf8'>
-                {total_litres:,.1f}L
-            </div>
-        </div>""", unsafe_allow_html=True)
-        c2.markdown(f"""<div class='metric-card'>
-            <div class='metric-label'>MILK REVENUE</div>
-            <div class='metric-value' style='color:#4ade80'>
-                KES {total_revenue:,.0f}
-            </div>
-        </div>""", unsafe_allow_html=True)
-        c3.markdown(f"""<div class='metric-card'>
-            <div class='metric-label'>AVG/DAY</div>
-            <div class='metric-value'>{avg_daily}L</div>
-        </div>""", unsafe_allow_html=True)
-        c4.markdown(f"""<div class='metric-card'>
-            <div class='metric-label'>DAYS RECORDED</div>
-            <div class='metric-value'>{days_recorded}</div>
-        </div>""", unsafe_allow_html=True)
-
-        st.markdown("---")
-
-        # Trend chart
-        st.markdown("<div class='section-header'>DAILY YIELD TREND</div>",
-                    unsafe_allow_html=True)
-        df_trend = (df.groupby("record_date")["total_ltrs"]
-                      .sum().reset_index()
-                      .sort_values("record_date"))
-        df_trend.columns = ["Date","Total Litres"]
-        st.line_chart(df_trend.set_index("Date"))
-
-        # Per animal
-        st.markdown("<div class='section-header'>BY ANIMAL</div>",
-                    unsafe_allow_html=True)
-        animal_milk = (df.groupby("animal_tag")
-                         .agg(total_ltrs=("total_ltrs","sum"),
-                              total_revenue=("revenue_kes","sum"))
-                         .reset_index()
-                         .sort_values("total_ltrs", ascending=False))
-        for _, row in animal_milk.iterrows():
-            st.markdown(f"""
-            <div style='background:#111827;border:1px solid #1e3a5f;
-                        border-radius:10px;padding:12px 16px;margin-bottom:6px'>
-                <div style='display:flex;justify-content:space-between'>
-                    <span style='font-family:Space Mono,monospace;
-                                 color:#38bdf8;font-weight:700'>
-                        🥛 {row["animal_tag"]}
-                    </span>
-                    <span style='color:#4ade80;font-family:Space Mono,monospace;
-                                 font-weight:700'>
-                        KES {row["total_revenue"]:,.0f}
-                    </span>
+            c1, c2, c3, c4 = st.columns(4)
+            c1.markdown(f"""<div class='metric-card'>
+                <div class='metric-label'>TOTAL YIELD</div>
+                <div class='metric-value' style='color:#38bdf8'>
+                    {total_litres:,.1f}L
                 </div>
-                <div style='color:#94a3b8;font-size:0.82rem;margin-top:4px'>
-                    {row["total_ltrs"]:,.1f} litres this month
+            </div>""", unsafe_allow_html=True)
+            c2.markdown(f"""<div class='metric-card'>
+                <div class='metric-label'>MILK REVENUE</div>
+                <div class='metric-value' style='color:#4ade80'>
+                    KES {total_revenue:,.0f}
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
+            </div>""", unsafe_allow_html=True)
+            c3.markdown(f"""<div class='metric-card'>
+                <div class='metric-label'>AVG/DAY</div>
+                <div class='metric-value'>{avg_daily}L</div>
+            </div>""", unsafe_allow_html=True)
+            c4.markdown(f"""<div class='metric-card'>
+                <div class='metric-label'>DAYS RECORDED</div>
+                <div class='metric-value'>{days_recorded}</div>
+            </div>""", unsafe_allow_html=True)
+
+            st.markdown("---")
+
+            st.markdown("<div class='section-header'>DAILY YIELD TREND</div>",
+                        unsafe_allow_html=True)
+            df_trend = (df.groupby("record_date")["total_ltrs"]
+                          .sum().reset_index()
+                          .sort_values("record_date"))
+            df_trend.columns = ["Date","Total Litres"]
+            st.line_chart(df_trend.set_index("Date"))
+
+            st.markdown("<div class='section-header'>BY ANIMAL</div>",
+                        unsafe_allow_html=True)
+            animal_milk = (df.groupby("animal_tag")
+                             .agg(total_ltrs=("total_ltrs","sum"),
+                                  total_revenue=("revenue_kes","sum"))
+                             .reset_index()
+                             .sort_values("total_ltrs", ascending=False))
+            for _, row in animal_milk.iterrows():
+                st.markdown(f"""
+                <div style='background:#111827;border:1px solid #1e3a5f;
+                            border-radius:10px;padding:12px 16px;margin-bottom:6px'>
+                    <div style='display:flex;justify-content:space-between'>
+                        <span style='font-family:Space Mono,monospace;
+                                     color:#38bdf8;font-weight:700'>
+                            🥛 {row["animal_tag"]}
+                        </span>
+                        <span style='color:#4ade80;font-family:Space Mono,monospace;
+                                     font-weight:700'>
+                            KES {row["total_revenue"]:,.0f}
+                        </span>
+                    </div>
+                    <div style='color:#94a3b8;font-size:0.82rem;margin-top:4px'>
+                        {row["total_ltrs"]:,.1f} litres this month
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)

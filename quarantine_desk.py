@@ -178,6 +178,10 @@ def render_quarantine_desk_page(profile: dict):
                         clean_phone = selected_phone.strip().replace(" ", "").replace("+", "")
                         if clean_phone.startswith("0"):
                             clean_phone = "254" + clean_phone[1:]
+                        # Belt-and-suspenders: this value goes into an href
+                        # attribute below, so strip anything that isn't a
+                        # digit, no matter what was stored for this farmer.
+                        clean_phone = "".join(c for c in clean_phone if c.isdigit())
                         import urllib.parse
                         wa_link = f"https://wa.me/{clean_phone}?text={urllib.parse.quote(msg)}"
                         st.markdown(

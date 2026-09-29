@@ -89,16 +89,33 @@ def register_user(username: str, password: str,
         return False, (f"Invite code is for '{code_role}' role, "
                        f"but you selected '{role}'.")
 
-    # ── Farmer company resolution ───────────────────────────────
-    # A farmer's company is NOT self-declared — it comes from whichever
-    # company generated the invite code they're using. This keeps farmer
-    # data correctly isolated per company (same principle as every other
-    # company-scoped read/write in this app). If target_company is blank,
-    # it means the code was deliberately created as an "independent farmer"
-    # code (admin-only checkbox) — the farmer becomes their own tenant,
-    # explicitly, not by silent default.
-    if role == "farmer":
-        if code_target_company and code_target_company.strip():
+    # ── Company resolution — NEVER self-declared ──────────────────
+    # A user's company/tenant is NOT typed by them at registration for any
+    # of these roles — it comes strictly from the invite code they used.
+    # This closes a real gap where non-farmer roles previously typed any
+    # company name into a free-text field and landed in that tenant's data.
+    #
+    # - farmer: company from the invite code's target_company, or the
+    #   farmer's own name if the code was generated as "independent"
+    #   (admin checkbox) — matches original behavior exactly.
+    # - diaspora_owner: livestock has no company/exporter concept at all —
+    #   every owner is always their own tenant, using their own name.
+    # - farm_manager / herdsman / veterinarian: company comes from the
+    #   invite code's target_company (set automatically by the owner who
+    #   invited them via their own self-service invite screen). If a code
+    #   for these roles somehow has no target_company (e.g. a
+    #   general-pool vet invited directly by admin), fall back to their
+    #   own name for now — the real general-vet-pool model (consultations
+    #   keyed by which farm/animal was treated, not the vet's own company)
+    #   is a separate, larger piece not built yet.
+    ALWAYS_INDEPENDENT_ROLES = {"diaspora_owner"}
+    COMPANY_FROM_INVITE_ROLES = {"farmer", "diaspora_owner", "farm_manager",
+                                  "herdsman", "veterinarian"}
+
+    if role in COMPANY_FROM_INVITE_ROLES:
+        if role in ALWAYS_INDEPENDENT_ROLES:
+            company = full_name.strip() or "Individual"
+        elif code_target_company and code_target_company.strip():
             valid_c, company, err_c = sanitize_company(code_target_company)
             if not valid_c:
                 company = code_target_company.strip()
@@ -163,6 +180,11 @@ def login_user(username: str,
         log_security_event("login_failed", username,
                            "Wrong password", False)
         return False, "Invalid username or password.", None
+
+    if not user.get("is_active", True):
+        log_security_event("login_blocked", username,
+                           "Deactivated account", False)
+        return False, "This account has been deactivated. Contact your farm    manager or admin.", None      
 
     # ── Success — reset rate limit ─────────────────────────────
     reset_rate_limit(rate_key)

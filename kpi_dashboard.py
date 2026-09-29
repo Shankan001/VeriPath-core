@@ -129,7 +129,7 @@ def render_kpi_dashboard(profile: dict):
     st.markdown("<div style='font-family:Space Mono,monospace;font-size:0.75rem;"
                 "color:#64748b;letter-spacing:0.1em;text-transform:uppercase;"
                 "margin-bottom:12px'>All Companies</div>", unsafe_allow_html=True)
-    companies_list = list_all_companies(exporters_only=True)
+    companies_list = list_all_companies(exporters_only=False)
     if companies_list:
         df = pd.DataFrame(companies_list)
         st.dataframe(df, use_container_width=True, hide_index=True)
@@ -236,7 +236,7 @@ def render_kpi_dashboard(profile: dict):
 
     from supabase_db import get_company, ensure_company, update_company_profile, get_client as _gc3
 
-    _companies_dict = list_all_companies(exporters_only=True)
+    _companies_dict = list_all_companies(exporters_only=False)
     _support_company_names = sorted([c["Company"] for c in _companies_dict]) if _companies_dict else []
 
     if _support_company_names:

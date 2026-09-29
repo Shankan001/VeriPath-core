@@ -28,6 +28,11 @@ from livestock_alerts   import render_alert_centre
 from livestock_vet_earnings import render_vet_earnings
 from livestock_hardware import render_hardware_registry
 from livestock_admin    import render_admin_overview
+from livestock_costs    import render_cost_entry
+from livestock_milk     import render_milk_tracker
+from livestock_pnl      import render_pnl_dashboard
+from growth_feed_tracker import render_growth_feed_tracker
+from livestock_owner_invites import render_owner_invite
 from support import render_support_page, render_floating_support_button
 from certificate_vault_page import render_certificate_vault_page
 from farm_boundary_upload import render_farm_boundary_upload_page
@@ -181,22 +186,27 @@ ROLE_PAGES = {
         "📊 Farm Overview","🐄 Animal Registry","🌡 Temperature Entry",
         "📋 Daily Symptom Log","🧪 Disease Probability","🚨 Clinical Alerts",
         "🌍 My Animals","🌡 Health Alerts","💰 My Earnings",
-        "🔧 Hardware Registry","🔑 Invite Codes","👥 My Team","🗑 Demo Reset",
+        "🔧 Hardware Registry","💰 Cost of Production","🥛 Milk Tracker",
+        "📈 Farm P&L","📈 Growth & Feed","🔑 Invite Codes","👥 My Team","🗑 Demo Reset",
     ],
     "diaspora_owner": [
-        "🌍 My Animals","🌡 Health Alerts","📋 Vet Reports",
-        "💳 Payments & Commissions","🆘 Support",
+        "📊 Farm Overview","🌍 My Animals","🌡 Health Alerts","📋 Vet Reports",
+        "💰 Cost of Production","🥛 Milk Tracker","📈 Farm P&L","📈 Growth & Feed",
+        "💳 Payments & Commissions","🔑 Invite My Team","🆘 Support",
     ],
     "veterinarian": [
         "🚨 Clinical Alerts","🐄 Animal Registry","📋 Patient History",
         "🧪 Disease Probability","📋 Daily Symptom Log","💰 My Earnings",
         "🔧 Hardware Registry","🆘 Support",
     ],
-    "herdsman": ["📋 Daily Symptom Log","🐄 My Herd","🌡 Temperature Entry"],
+    "herdsman": [
+        "📋 Daily Symptom Log","🐄 My Herd","🌡 Temperature Entry",
+        "💰 Cost of Production","🥛 Milk Tracker","📈 Growth & Feed",
+    ],
     "farm_manager": [
         "📊 Farm Overview","🐄 Animal Registry","🌡 Temperature Entry",
         "📋 Daily Symptom Log","🌡 Health Monitoring","🔧 Hardware Registry",
-        "💰 Cost of Production","🥛 Milk Tracker","📈 Farm P&L",
+        "💰 Cost of Production","🥛 Milk Tracker","📈 Farm P&L","📈 Growth & Feed",
         "🏢 Company Profile","👥 My Team","🆘 Support",
     ],
 }
@@ -225,10 +235,14 @@ if not st.session_state["authenticated"]:
     st.markdown("<div class='auth-tagline'>Kenya Agricultural Intelligence Infrastructure</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("---")
-    col_l, col_r = st.columns(2)
+    col_l, col_m, col_r = st.columns(3)
     with col_l:
         if st.button("🔑 Sign In", use_container_width=True):
             st.session_state["auth_page"] = "login"
+            st.rerun()
+    with col_m:
+        if st.button("📱 Phone Login", use_container_width=True):
+            st.session_state["auth_page"] = "otp"
             st.rerun()
     with col_r:
         if st.button("📝 Register", use_container_width=True):
@@ -292,6 +306,44 @@ if not st.session_state["authenticated"]:
                     st.error(f"❌ {msg}")
         st.markdown("<br><small style='color:#64748b'>No account? Click Register above.</small>", unsafe_allow_html=True)
 
+    elif st.session_state["auth_page"] == "otp":
+        st.markdown("### Sign In with Phone (OTP)")
+        from otp_login import request_otp, verify_otp_and_login
+
+        otp_phone = st.text_input("Phone number", placeholder="07XXXXXXXX or +2547XXXXXXXX", key="otp_phone_input")
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            if st.button("📲 Send Code", use_container_width=True, key="otp_send_btn"):
+                if not otp_phone.strip():
+                    st.error("Enter your phone number.")
+                else:
+                    ok, msg = request_otp(otp_phone)
+                    if ok:
+                        st.session_state["otp_requested_for"] = otp_phone
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+
+        if st.session_state.get("otp_requested_for"):
+            otp_code = st.text_input("6-digit code", max_chars=6, key="otp_code_input")
+            with col_b:
+                if st.button("✅ Verify & Sign In", use_container_width=True, key="otp_verify_btn"):
+                    ok, msg, profile = verify_otp_and_login(
+                        st.session_state["otp_requested_for"], otp_code
+                    )
+                    if ok:
+                        st.session_state["authenticated"] = True
+                        st.session_state["user_profile"] = profile
+                        _token = create_session(profile["username"])
+                        set_session_cookie(_token)
+                        st.success(f"✅ {msg}")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ {msg}")
+
+        st.markdown("<br><small style='color:#64748b'>Only works for numbers already on file for an existing account. New here? Click Register above.</small>", unsafe_allow_html=True)
+
     else:
         st.markdown("### Create Your Account")
         st.markdown("<div class='section-header'>STEP 1 — CHOOSE YOUR MODULE</div>", unsafe_allow_html=True)
@@ -334,7 +386,7 @@ if not st.session_state["authenticated"]:
             )
             st.markdown("<div class='section-header'>STEP 2 — YOUR DETAILS</div>", unsafe_allow_html=True)
             # Filter out herdsman from registration — field role only
-            reg_roles = [r for r in mod_cfg["roles"] if r != "herdsman"]
+            reg_roles = mod_cfg["roles"]
 
             with st.form("register_form"):
                 col1, col2 = st.columns(2)
@@ -345,13 +397,20 @@ if not st.session_state["authenticated"]:
                                                help="Used for password reset via SMS.")
                 with col2:
                     role = st.selectbox("Role", reg_roles)
-                    # Farmers are individuals — no company
-                    is_farmer = role == "farmer"
-                    if is_farmer:
+                    # These roles never self-declare a company — it's either
+                    # always-independent (farmer, diaspora_owner) or derived
+                    # from the invite code they used (farm_manager, herdsman,
+                    # veterinarian). See auth.py's register_user for the
+                    # actual source of truth; this is just a placeholder so
+                    # the form's required-field check passes.
+                    AUTO_COMPANY_ROLES = {"farmer", "diaspora_owner", "farm_manager",
+                                           "herdsman", "veterinarian"}
+                    is_auto_company = role in AUTO_COMPANY_ROLES
+                    if is_auto_company:
                         company = full_name.strip() or "Individual"
                         st.markdown(
-                            "<small style='color:#64748b'>Farmers register as individuals "
-                            "— no company needed.</small>",
+                            "<small style='color:#64748b'>No company needed — this is "
+                            "linked automatically from your invite code.</small>",
                             unsafe_allow_html=True
                         )
                     else:
@@ -386,8 +445,10 @@ if not st.session_state["authenticated"]:
                 submit = st.form_submit_button("Create Account →", use_container_width=True)
 
             if submit:
-                # For farmers, company = their name
-                if role == "farmer":
+                # Same auto-company roles as above — belt-and-suspenders in
+                # case Streamlit's form state didn't carry the value through.
+                if role in {"farmer", "diaspora_owner", "farm_manager",
+                            "herdsman", "veterinarian"}:
                     company = full_name.strip() or "Individual"
                 errors = []
                 if not full_name.strip():              errors.append("Full Name is required")
@@ -1122,6 +1183,9 @@ elif page == "🌱 Carbon Tracking":
 elif page == "📈 KPI Dashboard":
     render_kpi_dashboard(profile)
 
+elif page == "🔑 Invite My Team":
+    render_owner_invite(profile)
+
 elif page == "🔑 Invite Codes":
     st.markdown("# 🔑 Invite Code Manager")
     st.markdown("<p style='color:#64748b'>Generate and track invite codes for new users</p>", unsafe_allow_html=True)
@@ -1189,7 +1253,7 @@ elif page == "🗑 Demo Reset":
         <div style='font-size:1rem;font-weight:700;color:#f87171'>⚠ DANGER ZONE</div>
         <div style='color:#94a3b8;margin-top:6px;font-size:0.9rem'>
             This will permanently delete all consignment and ledger records for
-            <b style='color:#e8eaf0'>{company}</b>.<br>
+            <b style='color:#e8eaf0'>{escape_html(company)}</b>.<br>
             Farmer registrations and user accounts are NOT deleted.
         </div>
     </div>
@@ -1303,3 +1367,6 @@ elif page == "🥛 Milk Tracker":
 
 elif page == "📈 Farm P&L":
     render_pnl_dashboard(profile)
+
+elif page == "📈 Growth & Feed":
+    render_growth_feed_tracker(profile)
