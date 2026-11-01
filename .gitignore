@@ -39,3 +39,11 @@ kakuzi_avocado_packing_list_2024.xlsx
 .env
 node_modules/
 data/
+
+add_*.py
+fix_*.py
+patch_*.py
+*_patch.py
+clarify_*.py
+*.bak*
+*.pre-export
