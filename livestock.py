@@ -65,7 +65,7 @@ SPECIES_CONFIG = {
     },
     "Cattle": {
         "breeds": ["Boran", "Sahiwal", "Friesian", "Ayrshire", "Zebu",
-                   "Angus cross", "Simmental cross", "Other"],
+                   "Angus cross", "Simmental cross", "Brahman", "Other"],
         "temp_normal": (38.0, 39.3),
         "temp_mild":   39.5,
         "temp_sig":    39.8,
@@ -246,13 +246,12 @@ def render_animal_registry(profile: dict):
         </div>
         """, unsafe_allow_html=True)
 
+        st.markdown("**Species**")
+        species = st.selectbox("Species *", list(SPECIES_CONFIG.keys()), key="reg_species_select")
+
         with st.form("register_animal_form", clear_on_submit=True):
-            st.markdown("**Species & Breed**")
-            col1, col2 = st.columns(2)
-            with col1:
-                species = st.selectbox("Species *", list(SPECIES_CONFIG.keys()))
-            with col2:
-                breed = st.selectbox("Breed *", SPECIES_CONFIG[species]["breeds"])
+            st.markdown("**Breed**")
+            breed = st.selectbox("Breed *", SPECIES_CONFIG[species]["breeds"])
 
             st.markdown("**Animal Details**")
             col3, col4, col5 = st.columns(3)

@@ -114,7 +114,9 @@ def register_user(username: str, password: str,
 
     if role in COMPANY_FROM_INVITE_ROLES:
         if role in ALWAYS_INDEPENDENT_ROLES:
-            company = full_name.strip() or "Individual"
+            if not full_name.strip():
+                return False, "Full name is required."
+            company = full_name.strip()
         elif code_target_company and code_target_company.strip():
             valid_c, company, err_c = sanitize_company(code_target_company)
             if not valid_c:
@@ -184,7 +186,7 @@ def login_user(username: str,
     if not user.get("is_active", True):
         log_security_event("login_blocked", username,
                            "Deactivated account", False)
-        return False, "This account has been deactivated. Contact your farm    manager or admin.", None      
+        return False, "This account has been deactivated. Contact your farm manager or admin.", None      
 
     # ── Success — reset rate limit ─────────────────────────────
     reset_rate_limit(rate_key)

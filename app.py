@@ -30,6 +30,8 @@ from livestock_hardware import render_hardware_registry
 from livestock_admin    import render_admin_overview
 from livestock_costs    import render_cost_entry
 from livestock_milk     import render_milk_tracker
+from website_listings   import render_website_listings
+from client_sites       import render_client_sites
 from livestock_pnl      import render_pnl_dashboard
 from growth_feed_tracker import render_growth_feed_tracker
 from livestock_owner_invites import render_owner_invite
@@ -187,12 +189,12 @@ ROLE_PAGES = {
         "📋 Daily Symptom Log","🧪 Disease Probability","🚨 Clinical Alerts",
         "🌍 My Animals","🌡 Health Alerts","💰 My Earnings",
         "🔧 Hardware Registry","💰 Cost of Production","🥛 Milk Tracker",
-        "📈 Farm P&L","📈 Growth & Feed","🔑 Invite Codes","👥 My Team","🗑 Demo Reset",
+        "📈 Farm P&L","📈 Growth & Feed","🌐 Website Listings","🏢 Client Sites","🔑 Invite Codes","👥 My Team","🗑 Demo Reset",
     ],
     "diaspora_owner": [
         "📊 Farm Overview","🌍 My Animals","🌡 Health Alerts","📋 Vet Reports",
         "💰 Cost of Production","🥛 Milk Tracker","📈 Farm P&L","📈 Growth & Feed",
-        "💳 Payments & Commissions","🔑 Invite My Team","🆘 Support",
+        "💳 Payments & Commissions","🌐 Website Listings","🔑 Invite My Team","🆘 Support",
     ],
     "veterinarian": [
         "🚨 Clinical Alerts","🐄 Animal Registry","📋 Patient History",
@@ -207,7 +209,7 @@ ROLE_PAGES = {
         "📊 Farm Overview","🐄 Animal Registry","🌡 Temperature Entry",
         "📋 Daily Symptom Log","🌡 Health Monitoring","🔧 Hardware Registry",
         "💰 Cost of Production","🥛 Milk Tracker","📈 Farm P&L","📈 Growth & Feed",
-        "🏢 Company Profile","👥 My Team","🆘 Support",
+        "🏢 Company Profile","🌐 Website Listings","👥 My Team","🆘 Support",
     ],
 }
 
@@ -1364,6 +1366,12 @@ elif page == "💰 Cost of Production":
 
 elif page == "🥛 Milk Tracker":
     render_milk_tracker(profile)
+
+elif page == "🌐 Website Listings":
+    render_website_listings(profile)
+
+elif page == "🏢 Client Sites":
+    render_client_sites(profile)
 
 elif page == "📈 Farm P&L":
     render_pnl_dashboard(profile)
