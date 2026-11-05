@@ -1,13 +1,9 @@
 """
-VeriPath Regulatory Certificate Vault — Stage 4
-Cross-check engines + VP-VISA code generation + save-to-vault orchestration.
+VeriPath Regulatory Certificate Vault: cross-checks and lot codes.
 
-ASSUMPTIONS TO VERIFY (marked below with # ASSUMPTION):
-1. Your `consignments` table has columns `id` and a weight/volume field —
-   guessed as `weight_kg`. Adjust to match your real column name.
-2. PDF generation uses `fpdf2` (common, lightweight). If your app already
-   uses `reportlab` or another library elsewhere, tell me and I'll rewrite
-   generate_kra_pdf() to match, so you're not maintaining two PDF libraries.
+Cross-checks certificate data against consignment and packhouse records,
+generates VP-VISA compliance codes for verified lots, and saves verified
+certificates to the vault.
 """
 import random
 import string
@@ -126,13 +122,19 @@ def check_kephis_vs_packhouse(supabase, vault_id: str, parsed_data: dict, consig
         return {"status": "flagged", "reason": "Cannot verify — no company context provided for this check."}
 
     try:
-        consignment = supabase.table("consignments").select("weight_kg, company").eq("id", consignment_id).single().execute().data
+        consignment = supabase.table("consignments").select("net_weight_kg, company").eq("id", consignment_id).single().execute().data
         if not consignment or consignment.get("company", "").strip().lower() != company.strip().lower():
             return {"status": "flagged", "reason": "Consignment ID does not belong to your company."}
-        packhouse_weight = consignment.get("weight_kg")
+        packhouse_weight = consignment.get("net_weight_kg")
 
         if cert_weight is None or packhouse_weight is None:
             return {"status": "flagged", "reason": "Could not compare weights — one or both values missing."}
+
+        try:
+            cert_weight = float(str(cert_weight).replace(",", "").lower().replace("kg", "").strip())
+            packhouse_weight = float(packhouse_weight)
+        except (TypeError, ValueError):
+            return {"status": "flagged", "reason": "Could not read weight values as numbers."}
 
         tolerance_pct = 0.05
         diff_pct = abs(cert_weight - packhouse_weight) / packhouse_weight if packhouse_weight else 1
