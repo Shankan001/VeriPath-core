@@ -7,7 +7,6 @@ qrcode[pil]
 Pillow
 reportlab
 playwright
-fpdf2
 supabase
 pdfplumber
 pypdf

@@ -104,10 +104,8 @@ def register_user(username: str, password: str,
     #   invite code's target_company (set automatically by the owner who
     #   invited them via their own self-service invite screen). If a code
     #   for these roles somehow has no target_company (e.g. a
-    #   general-pool vet invited directly by admin), fall back to their
-    #   own name for now — the real general-vet-pool model (consultations
-    #   keyed by which farm/animal was treated, not the vet's own company)
-    #   is a separate, larger piece not built yet.
+    #   general-pool vet invited directly by admin), the company defaults
+    #   to their own name.
     ALWAYS_INDEPENDENT_ROLES = {"diaspora_owner"}
     COMPANY_FROM_INVITE_ROLES = {"farmer", "diaspora_owner", "farm_manager",
                                   "herdsman", "veterinarian"}

@@ -13,12 +13,9 @@ Needs SUPABASE_URL and SUPABASE_ANON_KEY (the anon/public key, NOT the
 service key — auth sign-in should always go through the anon key) set as
 environment variables, or in a .env file in the same folder.
 
-IMPORTANT: this uses your PRODUCTION Africa's Talking config if AT_BASE_URL
-was ever switched off sandbox. If you're still on sandbox mode from earlier
-testing, this OTP will NOT arrive as a real SMS (same sandbox limitation as
-before) - only the API call chain will be verified. Switch AT_BASE_URL /
-AT_USERNAME / AT_API_KEY to your live Africa's Talking app first if you want
-a real text to land on your phone.
+Note: if AT_BASE_URL points at the Africa's Talking sandbox, the OTP is not
+delivered as a real SMS and only the API call chain is verified. Configure
+AT_BASE_URL, AT_USERNAME and AT_API_KEY for a live app to receive a real text.
 """
 
 import os

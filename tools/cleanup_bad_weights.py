@@ -1,12 +1,13 @@
 """
-cleanup_bad_weights.py — removes the corrupted ledger rows found tonight
-(crop='Unknown' + implausible weight_kg from the pre-fix parsing bug).
+Removes ledger rows with crop 'Unknown' and an implausible weight_kg,
+left behind by an earlier parsing bug. Affects all companies; admin use only.
 
-Dry run by default — only lists what would be deleted.
+Dry run by default: only lists what would be deleted.
 Pass --confirm to actually delete.
 
-Run: python cleanup_bad_weights.py          (dry run)
-     python cleanup_bad_weights.py --confirm (actually deletes)
+Usage:
+    python cleanup_bad_weights.py             # dry run
+    python cleanup_bad_weights.py --confirm   # delete
 """
 
 import sys

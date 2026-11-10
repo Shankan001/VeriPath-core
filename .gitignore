@@ -47,3 +47,9 @@ patch_*.py
 clarify_*.py
 *.bak*
 *.pre-export
+
+failed_entries.txt
+
+get-docker.sh
+
+get-docker.sh

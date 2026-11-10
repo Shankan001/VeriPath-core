@@ -10,7 +10,7 @@ def generate_dashboard_summary():
     try:
         conn = sqlite3.connect('data/veripath_pulse.db')
         
-        # Pull everything from your secret database
+        # Load all records from the database
         query = "SELECT crop_type, weight_kg, lat, lon, timestamp FROM market_intelligence"
         df = pd.read_sql_query(query, conn)
         

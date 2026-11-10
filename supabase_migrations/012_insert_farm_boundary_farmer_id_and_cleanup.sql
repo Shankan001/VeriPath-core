@@ -1,6 +1,5 @@
 -- Step 1: insert_farm_boundary updated to use farmer_id instead of owner_username
--- (Note: this replaced an even earlier version that had both owner_username
--- AND farmer_id as a 5th default-NULL param — this is the final, real version.)
+-- Replaces earlier versions that accepted owner_username.
 DROP FUNCTION IF EXISTS insert_farm_boundary(text, text, text, text);
 
 CREATE OR REPLACE FUNCTION insert_farm_boundary(
